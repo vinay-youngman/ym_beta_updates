@@ -10,7 +10,7 @@
     'website': "https://www.youngman.co.in/",
     'sequence': -100,
 
-    'depends': ['base'],
+    'depends': ['base', 'sale_management', 'sale', 'jobsites', 'youngman_customers'],
 
     'data': [
         'views/views.xml'

@@ -1,1 +1,1 @@
-from . import res_config_settings, partner_inherit
+from . import res_config_settings, partner_inherit, sale_order_inherit
