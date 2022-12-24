@@ -1,0 +1,55 @@
+<odoo>
+
+    <record id="res_config_settings_view_form_beta_config" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.crm.ym_beta_updates</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="10"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('settings')]" position="inside">
+                <div class="app_settings_block" data-string="Beta Hooks" string="Beta Hooks" data-key="ym_beta_updates">
+                    <h2>Beta Database Config</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="o_setting_left_pane row">
+                            <label for="beta_db_url" name="Database URL"/>
+                            <field name="beta_db_url"/>
+                        </div>
+                        <div class="o_setting_left_pane row">
+                           <label for="beta_db_port" name="Database Port"/>
+                            <field name="beta_db_port" />
+                        </div>
+                        <div class="o_setting_left_pane row">
+                           <label for="beta_db" name="Database Name"/>
+                            <field name="beta_db"/>
+                        </div>
+                        <div class="o_setting_left_pane row">
+                            <label for="beta_db_username" name="Database User"/>
+                            <field name="beta_db_username"/>
+                        </div>
+                        <div class="o_setting_left_pane row">
+                            <label for="beta_db_password" name="Database Password"/>
+                            <field name="beta_db_password" password="True"/>
+                        </div>
+
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+      <record model="ir.actions.act_window" id="action_beta_hooks_config_settings">
+          <field name="name">Beta Hooks</field>
+          <field name="type">ir.actions.act_window</field>
+          <field name="res_model">res.config.settings</field>
+          <field name="view_id" ref="res_config_settings_view_form_beta_config"/>
+          <field name="view_mode">form</field>
+          <field name="target">inline</field>
+          <field name="context">{'module': 'ym_beta_updates'}</field>
+      </record>
+
+
+      <menuitem name="Beta Hooks"
+                id="menu_beta_hooks_config"
+                parent="crm.crm_menu_config"
+                action="action_beta_hooks_config_settings"/>
+</odoo>
