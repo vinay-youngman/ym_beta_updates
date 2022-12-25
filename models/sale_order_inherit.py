@@ -6,7 +6,7 @@ import logging
 import mysql.connector
 from mysql.connector import Error
 
-import datetime
+import datetime, mimetypes
 
 _logger = logging.getLogger(__name__)
 
@@ -16,20 +16,20 @@ from odoo.exceptions import UserError
 
 
 def get_create_by(created_by_result):
-    if len(created_by_result) == 0:
+    if not created_by_result or len(created_by_result) == 0:
         raise UserError("Your account does not exist in beta")
     else:
         return created_by_result[0]
 
 
 def get_beta_customer_id(customer_id_result):
-    if len(customer_id_result) == 0:
+    if not customer_id_result or len(customer_id_result) == 0:
         raise UserError("This branch has not been created in beta")
     else:
         return customer_id_result[0]
 
 def get_beta_godown_id(godown_result):
-    if len(godown_result) == 0:
+    if not godown_result or len(godown_result) == 0:
         raise UserError("Either of billing or parent godown is not present in beta")
     else:
         return godown_result[0]
@@ -57,7 +57,7 @@ def get_state_code_from_state_alpha_query(state_code):
     return "SELECT state_code FROM states WHERE state_alpha = '{}'".format(state_code)
 
 def get_order_insert_query():
-    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_etter, rental_advance, rental_order, godown_id, freight_amount, billing_godown, created_by, total, created_at, updated_at) VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_etter)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(freight_amount)s, %(billing_godown)s, %(created_by)s, %(total)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, freight_amount, billing_godown, created_by, total, created_at, updated_at) VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(freight_amount)s, %(billing_godown)s, %(created_by)s, %(total)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
 
 def get_beta_godown_id_by_name_query(godown_name):
     return "SELECT id from locations where type='godown' and location_name = '{}'".format(godown_name)
@@ -91,44 +91,60 @@ class SaleOrderInherit(models.Model):
             cursor = connection.cursor()
             email = "1rajeshretail@gmail.com" #self.env.user.email.lower()
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Get created by from beta")
             cursor.execute(get_beta_user_id_from_email_query(), [email])
             created_by = get_create_by(cursor.fetchone())
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Get customer id from beta")
             cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
             customer_id = get_beta_customer_id(cursor.fetchone())
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Get billing godown id from beta")
             cursor.execute(get_beta_godown_id_by_name_query(self.bill_godown.name))
             beta_bill_godown_id = get_beta_godown_id(cursor.fetchone())
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Get parent godown id from beta")
             cursor.execute(get_beta_godown_id_by_name_query(self.godown.name))
             beta_godown_id = get_beta_godown_id(cursor.fetchone())
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to save quotation")
             quotation = self.get_quotation_data(created_by, customer_id, beta_godown_id)
             cursor.execute(get_quotation_insert_query(), quotation)
             quotation_id = cursor.lastrowid
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Quotation saved with id" + str(quotation_id))
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to save quoataion items")
             quotation_items, quotation_total = self._get_quotation_items_and_total(quotation_id)
             cursor.executemany(get_quotation_items_insert_query(), quotation_items)
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Quotation items saved")
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Generating job order number")
             job_order_number = self._generate_job_number(created_by, customer_id, quotation_id)
             self.job_order = job_order_number
             self.name = job_order_number
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Get Place of supply code from beta")
             cursor.execute(get_state_code_from_state_alpha_query(self.place_of_supply.code))
+
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to create job order location")
             place_of_supply_code = cursor.fetchone()[0]
             cursor.execute(get_location_insert_query(), (job_order_number, place_of_supply_code))
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Location created with id" + str(cursor.lastrowid))
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to create order")
             order_data = self._get_order_data(created_by, customer_id, quotation_id, quotation_total, job_order_number, place_of_supply_code, beta_bill_godown_id, beta_godown_id)
             cursor.execute(get_order_insert_query(), order_data)
-
             order_id = cursor.lastrowid
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Updating quotation with order id")
             cursor.execute(get_update_quotation_with_order_query(), (order_id, quotation_id))
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
             cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.po_amount, self.po_amount))
-
             po_details = self._generate_po_details(order_id, quotation_items)
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Savinf PO details")
             cursor.executemany(get_order_po_details_insert_query(), po_details)
 
             billing_process_data = self._get_billing_process_data(order_id)
@@ -151,6 +167,7 @@ class SaleOrderInherit(models.Model):
             connection.commit()
 
         except Error as e:
+            _logger.error("evt=SEND_ORDER_TO_BETA msg=" + e.getMessage(), e)
             raise UserError(e)
 
     def _get_billing_process_data(self, order_id):
@@ -214,6 +231,8 @@ class SaleOrderInherit(models.Model):
             raise ValidationError(_('Rental Advance is mandatory for this customer'))
         if not self.security_cheque and self.customer_branch.security_cheque is True:
             raise ValidationError(_('Security Cheque is mandatory for this customer'))
+        if not self.partner_id.vat:
+            raise ValidationError(_("This customer does not have a PAN. Please check customer details"))
 
     def _generate_job_number(self, created_by, customer_id, quotation_id):
         today = datetime.date.today()
@@ -228,9 +247,9 @@ class SaleOrderInherit(models.Model):
             'po_no': self.po_number,
             'place_of_supply': place_of_supply_code,
             'gstn': self.customer_branch.gstn,
-            'security_etter': "",
-            'rental_advance': "",
-            'rental_order': "",
+            'security_cheque': self._get_document_if_exists('security_cheque'),
+            'rental_advance': self._get_document_if_exists('rental_advance'),
+            'rental_order': self._get_document_if_exists('rental_order'),
             'godown_id': beta_godown_id,
             'freight_amount': self.freight_amount,
             'billing_godown': beta_bill_godown_id,
@@ -238,6 +257,20 @@ class SaleOrderInherit(models.Model):
             'total': quotation_total,
 
         }
+
+    def _get_document_if_exists(self, field_name):
+        PREFIX = "s3://"
+        attachment = self.env['ir.attachment'].sudo().search([('res_model', '=', 'sale.order'), ('res_field', '=', field_name), ('res_id', '=', self.id)])
+
+        fname = attachment.store_fname if attachment else ""
+        mimetype = attachment.mimetype if attachment else ""
+
+        extension = mimetypes.guess_extension(mimetype, strict=True)
+
+        if fname.startswith(PREFIX):
+            return fname[len(PREFIX):] + extension if extension else ""
+
+        return None
 
     def get_quotation_data(self, created_by, customer_id, beta_godown_id):
         return {
