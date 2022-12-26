@@ -153,7 +153,7 @@ class SaleOrderInherit(models.Model):
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving Bill Submission details")
             billing_process_data = self._get_billing_process_data(order_id, location_id)
-            cursor.executemany(get_billing_process_insert_query(), po_details)
+            cursor.executemany(get_billing_process_insert_query(), billing_process_data)
 
             #IDK how to do it
             #cursor.execute(get_billing_process_insert_query, billing_process_data)
