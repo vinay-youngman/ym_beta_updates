@@ -151,14 +151,14 @@ class SaleOrderInherit(models.Model):
 
             #IDK how to do it
             #cursor.execute(get_billing_process_insert_query, billing_process_data)
-
+            """
             if self.env.user == self.env['crm.team'].search([('name', '=', 'INSIDE SALES')]).user_id:
                 team_id = self.env['crm.team'].search([('name', 'in', ['INSIDE SALES', 'PAM'])]).ids
                 return [('id', 'in', team_id)]
             else:
                 team_id = self.env['crm.team'].search([('name', 'in', ['INSIDE SALES'])]).ids
                 return [('id', 'in', team_id)]
-
+            """
             # To be done if auto approval
             # DB::insert("INSERT INTO `order_item_feed`(`job_order`, `item_code`, `quantity`) VALUES (?, ?, ?)", [ $order->job_order, $order_item->item_code, $order_item->quantity]);
 
