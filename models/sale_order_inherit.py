@@ -172,7 +172,7 @@ class SaleOrderInherit(models.Model):
             connection.commit()
 
         except Error as e:
-            _logger.error("evt=SEND_ORDER_TO_BETA msg=" + e.getMessage(), e)
+            _logger.error("evt=SEND_ORDER_TO_BETA msg=Houston, we have a %s", "major problem", exc_info=1)
             raise UserError(e)
 
     def _get_billing_process_data(self, order_id, location_id):
