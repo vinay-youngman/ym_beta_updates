@@ -179,22 +179,22 @@ class SaleOrderInherit(models.Model):
 
     def _get_billing_process_data(self, order_id, location_id):
         return (
-            order_id,
+            str(order_id),
             self.bill_site_contact.id if self.bill_site_contact else None,
             self.bill_office_contact.id if self.bill_office_contact else None,
-            location_id,
+            str(location_id),
             self._concatenate_address_string([
                 self.delivery_street,
                 self.delivery_street2,
                 self.delivery_city,
                 self.delivery_state_id if self.delivery_state_id.name else False]),
-            self.delivery_zip,
+            str(self.delivery_zip),
             self._concatenate_address_string([
                 self.bill_submission_office_branch.street,
                 self.bill_submission_office_branch.street2,
                 self.bill_submission_office_branch.city,
                 self.bill_submission_office_branch.state_id if self.bill_submission_office_branch.state_id.name else False]),
-            self.bill_submission_office_branch.zip,
+            str(self.bill_submission_office_branch.zip),
             self.partner_id.bill_submission_process.name
         )
 
