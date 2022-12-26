@@ -57,7 +57,7 @@ def get_state_code_from_state_alpha_query(state_code):
     return "SELECT state_code FROM states WHERE state_alpha = '{}'".format(state_code)
 
 def get_order_insert_query():
-    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, freight_amount, billing_godown, created_by, total, created_at, updated_at) VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(freight_amount)s, %(billing_godown)s, %(created_by)s, %(total)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, freight_amount, billing_godown, created_by, total, is_authorized, created_at, updated_at) VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(freight_amount)s, %(billing_godown)s, %(created_by)s, %(total)s, %(is_authorized)s,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
 
 def get_beta_godown_id_by_name_query(godown_name):
     return "SELECT id from locations where type='godown' and location_name = '{}'".format(godown_name)
@@ -89,7 +89,7 @@ class SaleOrderInherit(models.Model):
             connection = self._get_connection()
             connection.autocommit = False
             cursor = connection.cursor()
-            email = "1rajeshretail@gmail.com" #self.env.user.email.lower()
+            email = self.env.user.login.lower()
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get created by from beta")
             cursor.execute(get_beta_user_id_from_email_query(), [email])
@@ -265,7 +265,7 @@ class SaleOrderInherit(models.Model):
         job_order_number = str(today.year) + "/" + today.strftime("%b") + "/" + self.jobsite_id.name + "/" + str(created_by) + "/" + str(customer_id) + "/" + self.po_number + "/" + str(quotation_id)
         return job_order_number
 
-    def _get_order_data(self, created_by, customer_id, quotation_id, quotation_total, job_order_number, place_of_supply_code,beta_bill_godown_id,  beta_godown_id):
+    def _get_order_data(self, created_by, customer_id, quotation_id, quotation_total, job_order_number, place_of_supply_code,beta_bill_godown_id,  beta_godown_id, is_authorized):
         return {
             'quotation_id': quotation_id,
             'customer_id': customer_id,
@@ -281,6 +281,7 @@ class SaleOrderInherit(models.Model):
             'billing_godown': beta_bill_godown_id,
             'created_by': created_by,
             'total': quotation_total,
+            'is_authorized': is_authorized
 
         }
 
