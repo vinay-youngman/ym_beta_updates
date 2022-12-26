@@ -75,8 +75,8 @@ def get_order_po_details_insert_query():
 
 
 def get_billing_process_insert_query():
-    return "insert into billing_process (order_id, site_contact, odoo_site_contact, office_contact, odoo_office_contact, bill_submission_location, site_address, site_pincode, office_address, office_pincode, process, po_required, challan_required) " \
-           "VALUES (%(order_id)s, NULL, %(odoo_site_contact)s,NULL,%(odoo_office_contact)s,%(bill_submission_location)s,%(site_address)s,%(site_pincode)s,%(office_address)s,%(office_pincode)s,%(process)s, NULL, NULL)"
+    return "insert into billing_process (order_id, odoo_site_contact, odoo_office_contact, bill_submission_location, site_address, site_pincode, office_address, office_pincode, process) " \
+           "VALUES (%(order_id)s, %(odoo_site_contact)s,%(odoo_office_contact)s,%(bill_submission_location)s,%(site_address)s,%(site_pincode)s,%(office_address)s,%(office_pincode)s,%(process)s)"
 
 
 class SaleOrderInherit(models.Model):
@@ -188,7 +188,7 @@ class SaleOrderInherit(models.Model):
                 self.delivery_city,
                 self.delivery_state_id if self.delivery_state_id.name else False]),
             'site_pincode': self.delivery_zip,
-            'office_address': self._concatenate_address_string( [
+            'office_address': self._concatenate_address_string([
                 self.bill_submission_office_branch.street,
                 self.bill_submission_office_branch.street2,
                 self.bill_submission_office_branch.city,
