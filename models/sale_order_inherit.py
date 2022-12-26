@@ -75,8 +75,8 @@ def get_order_po_details_insert_query():
 
 
 def get_billing_process_insert_query():
-    return "insert into billing_process (order_id, site_contact, odoo_site_contact, office_contact, odoo_office_contact, bill_submission_location, site_address, site_pincode, office_address, office_pincode, process, po_required, challan_required, status) VALUES ()"
-
+    return "insert into billing_process (order_id, site_contact, odoo_site_contact, office_contact, odoo_office_contact, bill_submission_location, site_address, site_pincode, office_address, office_pincode, process, po_required, challan_required) " \
+           "VALUES (%(order_id)s, None, %(odoo_site_contact)s,None,%(odoo_office_contact)s,%(bill_submission_location)s,%(site_address)s,%(site_pincode)s,%(office_address)s,%(office_pincode)s,%(process)s, NULL, NULL)"
 
 
 class SaleOrderInherit(models.Model):
@@ -129,7 +129,8 @@ class SaleOrderInherit(models.Model):
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to create job order location")
             place_of_supply_code = cursor.fetchone()[0]
             cursor.execute(get_location_insert_query(), (job_order_number, place_of_supply_code))
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Location created with id" + str(cursor.lastrowid))
+            location_id = cursor.lastrowid
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Location created with id" + str(location_id))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to create order")
             order_data = self._get_order_data(created_by, customer_id, quotation_id, quotation_total, job_order_number, place_of_supply_code, beta_bill_godown_id, beta_godown_id)
@@ -144,10 +145,11 @@ class SaleOrderInherit(models.Model):
             cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.po_amount, self.po_amount))
             po_details = self._generate_po_details(order_id, quotation_items)
 
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Savinf PO details")
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO details")
             cursor.executemany(get_order_po_details_insert_query(), po_details)
 
-            billing_process_data = self._get_billing_process_data(order_id)
+            billing_process_data = self._get_billing_process_data(order_id, location_id)
+            cursor.executemany(get_billing_process_insert_query(), po_details)
 
             #IDK how to do it
             #cursor.execute(get_billing_process_insert_query, billing_process_data)
@@ -170,17 +172,25 @@ class SaleOrderInherit(models.Model):
             _logger.error("evt=SEND_ORDER_TO_BETA msg=" + e.getMessage(), e)
             raise UserError(e)
 
-    def _get_billing_process_data(self, order_id):
+    def _get_billing_process_data(self, order_id, location_id):
         billing_process_data = {
             'order_id': order_id,
             'odoo_site_contact': self.bill_site_contact.id,
             'odoo_office_contact': self.bill_office_contact.id,
-            'bill_submission_location': self.partner_id.bill_submission_process,
-            'site_address': "",
-            'office_address': "",
-            'process': self.partner_id.bill_submission_process,
-            'po_required': "",
-            'challan_required': ""
+            'bill_submission_location': location_id,
+            'site_address': self._concatenate_address_string([
+                self.delivery_street,
+                self.delivery_street2,
+                self.delivery_city,
+                self.delivery_state_id if self.delivery_state_id.name else False]),
+            'site_pincode': self.delivery_zip,
+            'office_address': self._concatenate_address_string( [
+                self.bill_submission_office_branch.street,
+                self.bill_submission_office_branch.street2,
+                self.bill_submission_office_branch.city,
+                self.bill_submission_office_branch.state_id if self.bill_submission_office_branch.state_id.name else False]),
+            'office_pincode': self.bill_submission_office_branch.zip,
+            'process': self.partner_id.bill_submission_process.name
         }
         return billing_process_data
 
@@ -221,10 +231,6 @@ class SaleOrderInherit(models.Model):
             raise ValidationError(_('PO Date is mandatory for confirming a quotation'))
         if not self.place_of_supply:
             raise ValidationError(_('Place of Supply is mandatory for confirming a quotation'))
-        if not self.bill_site_contact:
-            raise ValidationError(_('Site Contact is mandatory for confirming a quotation'))
-        if not self.bill_office_contact:
-            raise ValidationError(_('Office Contact is mandatory for confirming a quotation'))
         if not self.rental_order and self.customer_branch.rental_order is True:
             raise ValidationError(_('Rental Order is mandatory for this customer'))
         if not self.rental_advance and self.customer_branch.rental_advance is True:
@@ -233,6 +239,20 @@ class SaleOrderInherit(models.Model):
             raise ValidationError(_('Security Cheque is mandatory for this customer'))
         if not self.partner_id.vat:
             raise ValidationError(_("This customer does not have a PAN. Please check customer details"))
+        if not self.partner_id.bill_submission_process:
+            raise ValidationError(_("This customer does not have a Bill submission process defined. Please check customer details"))
+        if self.partner_id.bill_submission_process.code == 'email' and not self.bill_submission_email:
+            raise ValidationError(_("Bill submission email is required."))
+        if self.partner_id.bill_submission_process.code in ['site', 'site_office'] and not self.site_bill_submission_godown :
+            raise ValidationError(_("Site Bill submission godown is required."))
+        if self.partner_id.bill_submission_process.code in ['site', 'site_office'] and not self.office_bill_submission_godown :
+            raise ValidationError(_("Office Bill submission godown is required."))
+        if self.partner_id.bill_submission_process.code in ['site', 'site_office'] and not self.bill_site_contact:
+            raise ValidationError(_("Bill Site Contact is required."))
+        if self.partner_id.bill_submission_process.code in ['office', 'site_office'] and not self.bill_office_contact:
+            raise ValidationError(_("Customer Bill Submission Office Contac"))
+        if self.partner_id.bill_submission_process.code in ['office', 'site_office'] and not self.bill_submission_office_branch:
+            raise ValidationError(_("Bill Submission Office Branch is required."))
 
     def _generate_job_number(self, created_by, customer_id, quotation_id):
         today = datetime.date.today()

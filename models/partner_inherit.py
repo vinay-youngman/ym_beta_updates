@@ -17,7 +17,7 @@ class ResPartner(models.Model):
     @api.onchange('bill_submission_process')
     def _onchange_bill_submission_process(self):
         if self._is_existing_record():
-            self._execute_single_update("UPDATE customer_masters SET bill_submission = %s WHERE crm_master_id = %s", (self.bill_submission_process.name, self.id.origin))
+            self._execute_single_update("UPDATE customer_masters SET bill_submission = %s WHERE crm_account_id = %s", (self.bill_submission_process.name, self.id.origin))
 
     @api.onchange('user_id')
     def _onchange_user_id(self):
