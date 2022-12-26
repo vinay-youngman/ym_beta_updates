@@ -151,8 +151,9 @@ class SaleOrderInherit(models.Model):
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO details")
             cursor.executemany(get_order_po_details_insert_query(), po_details)
 
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving Bill Submission details")
+
             billing_process_data = self._get_billing_process_data(order_id, location_id)
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving Bill Submission details " + str(billing_process_data) + " query=" + get_billing_process_insert_query())
             cursor.executemany(get_billing_process_insert_query(), billing_process_data)
 
             #IDK how to do it
@@ -173,7 +174,7 @@ class SaleOrderInherit(models.Model):
             connection.commit()
 
         except Error as e:
-            _logger.error("evt=SEND_ORDER_TO_BETA msg=Houston, we have a %s", "major problem", exc_info=1)
+            _logger.error("evt=SEND_ORDER_TO_BETA msg=", exc_info=1)
             raise e
 
     def _get_billing_process_data(self, order_id, location_id):
