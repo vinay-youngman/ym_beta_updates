@@ -76,7 +76,7 @@ def get_order_po_details_insert_query():
 
 def get_billing_process_insert_query():
     return "insert into billing_process (order_id, odoo_site_contact, odoo_office_contact, bill_submission_location, site_address, site_pincode, office_address, office_pincode, process) " \
-           "VALUES (%(order_id)s, %(odoo_site_contact)s,%(odoo_office_contact)s,%(bill_submission_location)s,%(site_address)s,%(site_pincode)s,%(office_address)s,%(office_pincode)s,%(process)s)"
+           "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
 
 class SaleOrderInherit(models.Model):
@@ -178,26 +178,25 @@ class SaleOrderInherit(models.Model):
             raise e
 
     def _get_billing_process_data(self, order_id, location_id):
-        billing_process_data = {
-            'order_id': order_id,
-            'odoo_site_contact': self.bill_site_contact.id,
-            'odoo_office_contact': self.bill_office_contact.id,
-            'bill_submission_location': location_id,
-            'site_address': self._concatenate_address_string([
+        return (
+            order_id,
+            self.bill_site_contact.id if self.bill_site_contact else None,
+            self.bill_office_contact.id if self.bill_office_contact else None,
+            location_id,
+            self._concatenate_address_string([
                 self.delivery_street,
                 self.delivery_street2,
                 self.delivery_city,
                 self.delivery_state_id if self.delivery_state_id.name else False]),
-            'site_pincode': self.delivery_zip,
-            'office_address': self._concatenate_address_string([
+            self.delivery_zip,
+            self._concatenate_address_string([
                 self.bill_submission_office_branch.street,
                 self.bill_submission_office_branch.street2,
                 self.bill_submission_office_branch.city,
                 self.bill_submission_office_branch.state_id if self.bill_submission_office_branch.state_id.name else False]),
-            'office_pincode': self.bill_submission_office_branch.zip,
-            'process': self.partner_id.bill_submission_process.name
-        }
-        return billing_process_data
+            self.bill_submission_office_branch.zip,
+            self.partner_id.bill_submission_process.name
+        )
 
     def _generate_po_details(self, order_id, quotation_items):
         po_details = []
