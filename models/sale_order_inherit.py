@@ -183,17 +183,9 @@ class SaleOrderInherit(models.Model):
             self.bill_site_contact.id if self.bill_site_contact else None,
             self.bill_office_contact.id if self.bill_office_contact else None,
             str(location_id),
-            self._concatenate_address_string([
-                self.delivery_street,
-                self.delivery_street2,
-                self.delivery_city,
-                self.delivery_state_id if self.delivery_state_id.name else False]),
+            self._concatenate_address_string([ self.delivery_street, self.delivery_street2, self.delivery_city, self.delivery_state_id if self.delivery_state_id.name else False]),
             str(self.delivery_zip),
-            self._concatenate_address_string([
-                self.bill_submission_office_branch.street,
-                self.bill_submission_office_branch.street2,
-                self.bill_submission_office_branch.city,
-                self.bill_submission_office_branch.state_id if self.bill_submission_office_branch.state_id.name else False]),
+            self._concatenate_address_string([ self.bill_submission_office_branch.street, self.bill_submission_office_branch.street2, self.bill_submission_office_branch.city, self.bill_submission_office_branch.state_id if self.bill_submission_office_branch.state_id.name else False]),
             str(self.bill_submission_office_branch.zip),
             self.partner_id.bill_submission_process.name
         )
