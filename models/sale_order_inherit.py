@@ -95,7 +95,7 @@ class SaleOrderInherit(models.Model):
             cursor.execute(get_beta_user_id_from_email_query(), [email])
             created_by = get_create_by(cursor.fetchone())
 
-            if self.parent_id.team_id.name == 'INSIDE SALES':
+            if self.partner_id.team_id.name == 'INSIDE SALES':
                 created_by = 568
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get customer id from beta")
