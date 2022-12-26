@@ -76,7 +76,7 @@ def get_order_po_details_insert_query():
 
 def get_billing_process_insert_query():
     return "insert into billing_process (order_id, site_contact, odoo_site_contact, office_contact, odoo_office_contact, bill_submission_location, site_address, site_pincode, office_address, office_pincode, process, po_required, challan_required) " \
-           "VALUES (%(order_id)s, None, %(odoo_site_contact)s,None,%(odoo_office_contact)s,%(bill_submission_location)s,%(site_address)s,%(site_pincode)s,%(office_address)s,%(office_pincode)s,%(process)s, NULL, NULL)"
+           "VALUES (%(order_id)s, NULL, %(odoo_site_contact)s,NULL,%(odoo_office_contact)s,%(bill_submission_location)s,%(site_address)s,%(site_pincode)s,%(office_address)s,%(office_pincode)s,%(process)s, NULL, NULL)"
 
 
 class SaleOrderInherit(models.Model):
@@ -151,6 +151,7 @@ class SaleOrderInherit(models.Model):
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO details")
             cursor.executemany(get_order_po_details_insert_query(), po_details)
 
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving Bill Submission details")
             billing_process_data = self._get_billing_process_data(order_id, location_id)
             cursor.executemany(get_billing_process_insert_query(), po_details)
 
@@ -173,7 +174,7 @@ class SaleOrderInherit(models.Model):
 
         except Error as e:
             _logger.error("evt=SEND_ORDER_TO_BETA msg=Houston, we have a %s", "major problem", exc_info=1)
-            raise UserError(e)
+            raise e
 
     def _get_billing_process_data(self, order_id, location_id):
         billing_process_data = {
