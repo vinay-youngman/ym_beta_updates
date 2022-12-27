@@ -57,7 +57,8 @@ def get_state_code_from_state_alpha_query(state_code):
     return "SELECT state_code FROM states WHERE state_alpha = '{}'".format(state_code)
 
 def get_order_insert_query():
-    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, freight_amount, billing_godown, created_by, total, is_authorized, created_at, updated_at) VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(freight_amount)s, %(billing_godown)s, %(created_by)s, %(total)s, %(is_authorized)s,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, freight_amount, billing_godown, created_by, total, is_authorized, created_at, updated_at) " \
+           "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(freight_amount)s, %(billing_godown)s, %(created_by)s, %(total)s, %(is_authorized)s,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
 
 def get_beta_godown_id_by_name_query(godown_name):
     return "SELECT id from locations where type='godown' and location_name = '{}'".format(godown_name)
@@ -136,7 +137,7 @@ class SaleOrderInherit(models.Model):
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Location created with id" + str(location_id))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to create order")
-            order_data = self._get_order_data(created_by, customer_id, quotation_id, quotation_total, job_order_number, place_of_supply_code, beta_bill_godown_id, beta_godown_id)
+            order_data = self._get_order_data(created_by, customer_id, quotation_id, quotation_total, job_order_number, place_of_supply_code, beta_bill_godown_id, beta_godown_id, "0")
             cursor.execute(get_order_insert_query(), order_data)
             order_id = cursor.lastrowid
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
