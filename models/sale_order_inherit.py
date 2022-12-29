@@ -120,7 +120,7 @@ class SaleOrderInherit(models.Model):
             connection = self._get_connection()
             connection.autocommit = False
             cursor = connection.cursor()
-            email = "achaurasiya@youngman.co.in"  # self.env.user.login.lower()
+            email = self.env.user.login.lower()
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get created by from beta")
             cursor.execute(get_beta_user_id_from_email_query(), [email])
@@ -256,10 +256,7 @@ class SaleOrderInherit(models.Model):
                     "branches": branches
                 })
 
-                beta_customer_save_endpoint = self.env['ir.config_parameter'].sudo().get_param('ym_beta_updates.beta_customer_save_endpoint')
-
-                if not beta_customer_save_endpoint:
-                    raise UserError(_("Beta save customer endpoint is not configured. Please reach out to system admins."))
+                beta_customer_save_endpoint = self._get_customer_creation_endpoint()
 
                 response = requests.request("POST", beta_customer_save_endpoint, headers={'Content-Type': 'application/json'}, data=payload, verify=False)
 
@@ -280,6 +277,13 @@ class SaleOrderInherit(models.Model):
             raise UserError("OOps:" + _(err))
         except Error as e:
             raise UserError(_(e))
+
+    def _get_customer_creation_endpoint(self):
+        beta_customer_save_endpoint = self.env['ir.config_parameter'].sudo().get_param(
+            'ym_beta_updates.beta_customer_save_endpoint')
+        if not beta_customer_save_endpoint:
+            raise UserError(_("Beta save customer endpoint is not configured. Please reach out to system admins."))
+        return beta_customer_save_endpoint
 
     def _get_branch_data_for_saving_in_beta(self, branch, user_id):
         branch_data = {
@@ -309,9 +313,7 @@ class SaleOrderInherit(models.Model):
                 user_id = self.parent_id.user_id.login
                 branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_id)
 
-                beta_branch_save_endpoint = self.env['ir.config_parameter'].sudo().get_param('ym_beta_updates.beta_branch_save_endpoint')
-                if not beta_branch_save_endpoint:
-                    raise UserError(_("Beta save customer branch endpoint is not configured. Please reach out to system admins."))
+                beta_branch_save_endpoint = self._get_branch_creation_endpoint()
 
                 response = requests.request("POST", beta_branch_save_endpoint, headers={'Content-Type': 'application/json'}, data=branch_data, verify=False)
 
@@ -330,9 +332,13 @@ class SaleOrderInherit(models.Model):
         except Error as e:
             raise UserError(_(e))
 
-
-
-
+    def _get_branch_creation_endpoint(self):
+        beta_branch_save_endpoint = self.env['ir.config_parameter'].sudo().get_param(
+            'ym_beta_updates.beta_branch_save_endpoint')
+        if not beta_branch_save_endpoint:
+            raise UserError(
+                _("Beta save customer branch endpoint is not configured. Please reach out to system admins."))
+        return beta_branch_save_endpoint
 
     def _is_to_be_auto_approved(self):
         if self.partner_id.team_id.name == "PAM" and self.partner_id.credit_rating in ['A', 'B']:
