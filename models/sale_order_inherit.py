@@ -92,12 +92,29 @@ def get_billing_process_insert_query():
            "VALUES (%(order_id)s, %(odoo_site_contact)s,%(odoo_office_contact)s,%(bill_submission_location)s,%(site_address)s,%(site_pincode)s,%(office_address)s,%(office_pincode)s,%(process)s)"
 
 
+def _concatenate_address_string(address_strings):
+    arr = [x for x in address_strings if x]
+    return ', '.join(map(str, arr))
+
+
+def _get_order_item_feed_details(job_order, quotation_items):
+    item_feed_details = []
+    for item in quotation_items:
+        item_feed_details.append({
+            'job_order': job_order,
+            'item_code': item['item_code'],
+            'quantity': item['quantity'],
+        })
+    return item_feed_details
+
+
 class SaleOrderInherit(models.Model):
     _inherit = 'sale.order'
 
     def action_confirm(self):
         self._validate_order_before_confirming()
         self._create_customer_in_beta_if_not_exists()
+        self._create_branch_in_beta_if_not_exists() #For branches that were added post initial customer creation
 
         try:
             connection = self._get_connection()
@@ -177,7 +194,7 @@ class SaleOrderInherit(models.Model):
 
                 _logger.info("evt=SEND_ORDER_TO_BETA msg=insert into order item feed")
                 cursor.executemany(get_order_item_feed_insert_query(),
-                                   self._get_order_item_feed_details(job_order_number, quotation_items))
+                                   _get_order_item_feed_details(job_order_number, quotation_items))
 
             super(SaleOrderInherit, self).action_confirm()
             cursor.close()
@@ -197,23 +214,7 @@ class SaleOrderInherit(models.Model):
 
                 branches = []
                 for branch in master_customer.branch_ids:
-                    branch_data = {
-                        "odoo_branch_id": branch.id,
-                        "branch_name": branch.name,
-                        "gstn": branch.gstn,
-                        "email": branch.email,
-                        "phone": branch.phone,
-                        "mobile": branch.mobile,
-                        "user_id": user_id,
-                        "bde": branch.bde.email,
-                        "branch_contact_name": branch.branch_contact_name,
-                        "billing_address_line": self._concatenate_address_string([branch.street, branch.street2, branch.state_id.name if branch.state_id else False]),
-                        "billing_address_city": branch.city,
-                        "billing_address_pincode": branch.zip,
-                        "mailing_address_line": self._concatenate_address_string([branch.mailing_street, branch.mailing_street2, branch.mailing_state_id.name if branch.mailing_state_id else False]),
-                        "mailing_address_city": branch.mailing_city,
-                        "mailing_address_pincode": branch.mailing_zip
-                    }
+                    branch_data = self._get_branch_data_for_saving_in_beta(branch, user_id)
                     branches.append(branch_data)
 
 
@@ -243,7 +244,7 @@ class SaleOrderInherit(models.Model):
                             "rental_advance": master_customer.rental_advance,
                             "rental_order": master_customer.rental_order,
                             "security_cheque": master_customer.security_cheque,
-                            "user_id":user_id,
+                            "user_id": user_id,
                             "account_receivable": master_customer.account_receivable.email,
                             "credit_limit": master_customer.credit_limit,
                             "credit_rating": master_customer.credit_rating,
@@ -260,11 +261,7 @@ class SaleOrderInherit(models.Model):
                 if not beta_customer_save_endpoint:
                     raise UserError(_("Beta save customer endpoint is not configured. Please reach out to system admins."))
 
-                headers = {
-                    'Content-Type': 'application/json'
-                }
-
-                response = requests.request("POST", beta_customer_save_endpoint, headers=headers, data=payload, verify=False)
+                response = requests.request("POST", beta_customer_save_endpoint, headers={'Content-Type': 'application/json'}, data=payload, verify=False)
 
                 if not response.ok:
                     raise UserError(_("Unable to save customer in beta."))
@@ -274,15 +271,67 @@ class SaleOrderInherit(models.Model):
                         branch.in_beta = True
 
         except requests.exceptions.HTTPError as errh:
-            raise UserError ("Http Error:" + _(errh))
+            raise UserError("Http Error:" + _(errh))
         except requests.exceptions.ConnectionError as errc:
-            raise UserError ("Error Connecting:" + _(errc))
+            raise UserError("Error Connecting:" + _(errc))
         except requests.exceptions.Timeout as errt:
-            raise UserError ("Timeout Error:" + _(errt))
+            raise UserError("Timeout Error:" + _(errt))
         except requests.exceptions.RequestException as err:
-            raise UserError ("OOps: Something Else" + _(err))
+            raise UserError("OOps:" + _(err))
         except Error as e:
             raise UserError(_(e))
+
+    def _get_branch_data_for_saving_in_beta(self, branch, user_id):
+        branch_data = {
+            "odoo_branch_id": branch.id,
+            "branch_name": branch.name,
+            "gstn": branch.gstn,
+            "email": branch.email,
+            "phone": branch.phone,
+            "mobile": branch.mobile,
+            "user_id": user_id,
+            "bde": branch.bde.email,
+            "branch_contact_name": branch.branch_contact_name,
+            "billing_address_line": _concatenate_address_string(
+                [branch.street, branch.street2, branch.state_id.name if branch.state_id else False]),
+            "billing_address_city": branch.city,
+            "billing_address_pincode": branch.zip,
+            "mailing_address_line": _concatenate_address_string([branch.mailing_street, branch.mailing_street2,
+                                                                 branch.mailing_state_id.name if branch.mailing_state_id else False]),
+            "mailing_address_city": branch.mailing_city,
+            "mailing_address_pincode": branch.mailing_zip
+        }
+        return branch_data
+
+    def _create_branch_in_beta_if_not_exists(self):
+        try:
+            if not self.customer_branch.in_beta:
+                user_id = self.parent_id.user_id.login
+                branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_id)
+
+                beta_branch_save_endpoint = self.env['ir.config_parameter'].sudo().get_param('ym_beta_updates.beta_branch_save_endpoint')
+                if not beta_branch_save_endpoint:
+                    raise UserError(_("Beta save customer branch endpoint is not configured. Please reach out to system admins."))
+
+                response = requests.request("POST", beta_branch_save_endpoint, headers={'Content-Type': 'application/json'}, data=branch_data, verify=False)
+
+                if not response.ok:
+                    raise UserError(_("Unable to save customer branch in beta."))
+                else:
+                    self.customer_branch.in_beta = True
+        except requests.exceptions.HTTPError as errh:
+            raise UserError("Http Error:" + _(errh))
+        except requests.exceptions.ConnectionError as errc:
+            raise UserError("Error Connecting:" + _(errc))
+        except requests.exceptions.Timeout as errt:
+            raise UserError("Timeout Error:" + _(errt))
+        except requests.exceptions.RequestException as err:
+            raise UserError("OOps:" + _(err))
+        except Error as e:
+            raise UserError(_(e))
+
+
+
 
 
     def _is_to_be_auto_approved(self):
@@ -291,29 +340,19 @@ class SaleOrderInherit(models.Model):
             return True
         return False
 
-    def _get_order_item_feed_details(self, job_order, quotation_items):
-        item_feed_details = []
-        for item in quotation_items:
-            item_feed_details.append({
-                'job_order': job_order,
-                'item_code': item['item_code'],
-                'quantity': item['quantity'],
-            })
-        return item_feed_details
-
     def _get_billing_process_data(self, order_id, location_id):
         billing_process_data = {
             'order_id': order_id,
             'odoo_site_contact': self.bill_site_contact.id,
             'odoo_office_contact': self.bill_office_contact.id,
             'bill_submission_location': location_id,
-            'site_address': self._concatenate_address_string([
+            'site_address': _concatenate_address_string([
                 self.delivery_street,
                 self.delivery_street2,
                 self.delivery_city,
                 self.delivery_state_id.name if self.delivery_state_id else False]),
             'site_pincode': self.delivery_zip,
-            'office_address': self._concatenate_address_string([
+            'office_address': _concatenate_address_string([
                 self.bill_submission_office_branch.street,
                 self.bill_submission_office_branch.street2,
                 self.bill_submission_office_branch.city,
@@ -448,11 +487,11 @@ class SaleOrderInherit(models.Model):
             'total': quotation_total,
             'freight': self.freight_amount,
             'gstn': 'Gstn Moved to Order',
-            'billing_address_line': self._concatenate_address_string(
+            'billing_address_line': _concatenate_address_string(
                 [self.billing_street, self.billing_street2, self.billing_city]),
             'billing_address_city': self.billing_state_id.name if self.billing_state_id else "",
             'billing_address_pincode': self.billing_zip,
-            'delivery_address_line': self._concatenate_address_string(
+            'delivery_address_line': _concatenate_address_string(
                 [self.delivery_street, self.delivery_street2, self.delivery_city]),
             'delivery_address_city': self.delivery_state_id.name if self.delivery_state_id else "",
             'delivery_address_pincode': self.delivery_zip,
@@ -464,10 +503,6 @@ class SaleOrderInherit(models.Model):
             'sign_type': 'MANUAL',
             'crm_account_id': self.id,
         }
-
-    def _concatenate_address_string(self, address_strings):
-        arr = [x for x in address_strings if x]
-        return ', '.join(map(str, arr))
 
     def _get_connection(self):
         connection = False
