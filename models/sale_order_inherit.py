@@ -269,6 +269,7 @@ class SaleOrderInherit(models.Model):
                 beta_customer_save_endpoint = self._get_customer_creation_endpoint()
 
                 response = requests.request("POST", beta_customer_save_endpoint, headers={'Content-Type': 'application/json'}, data=payload, verify=False)
+                response.raise_for_status()
 
                 if not response.ok:
                     raise UserError(_("Unable to save customer in beta."))
@@ -399,6 +400,9 @@ class SaleOrderInherit(models.Model):
 
     def _get_quotation_items_and_total(self, quotation_id):
         quotation_items = []
+        if len(self.order_line) == 0:
+            raise UserError("Please select quotation items.")
+
         for order_line in self.order_line:
             quotation_items.append({
                 'quotation_id': quotation_id,
