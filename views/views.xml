@@ -39,6 +39,10 @@
                             <label for="beta_branch_save_endpoint" name="Branch Save Endpoint"/>
                             <field name="beta_branch_save_endpoint"/>
                         </div>
+                        <div class="o_setting_left_pane row">
+                            <label for="file_save_bucket_url" name="File Save Bucket Url"/>
+                            <field name="file_save_bucket_url"/>
+                        </div>
                     </div>
                 </div>
             </xpath>

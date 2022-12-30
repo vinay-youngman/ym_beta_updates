@@ -485,7 +485,11 @@ class SaleOrderInherit(models.Model):
         }
 
     def _get_document_if_exists(self, field_name):
-        PREFIX = "s3://"
+        PREFIX = self.env['ir.config_parameter'].sudo().get_param('ym_beta_updates.file_save_bucket_url')
+
+        if not PREFIX:
+            raise UserError("file_save_bucket_url is not configured. Please reach out to system admins")
+
         attachment = self.env['ir.attachment'].sudo().search(
             [('res_model', '=', 'sale.order'), ('res_field', '=', field_name), ('res_id', '=', self.id)])
 
