@@ -31,6 +31,14 @@
                             <field name="beta_db_password" password="True"/>
                         </div>
 
+                        <div class="o_setting_left_pane row">
+                            <label for="beta_customer_save_endpoint" name="Customer Save Endpoint"/>
+                            <field name="beta_customer_save_endpoint"/>
+                        </div>
+                        <div class="o_setting_left_pane row">
+                            <label for="beta_branch_save_endpoint" name="Branch Save Endpoint"/>
+                            <field name="beta_branch_save_endpoint"/>
+                        </div>
                     </div>
                 </div>
             </xpath>
