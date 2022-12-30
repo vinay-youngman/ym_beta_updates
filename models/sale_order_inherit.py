@@ -168,7 +168,7 @@ class SaleOrderInherit(models.Model):
             self.job_order = job_order_number
             self.name = job_order_number
 
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Get Place of supply code from beta")
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Get Place of supply code from beta query=" + get_state_code_from_state_alpha_query(self.place_of_supply.code))
             cursor.execute(get_state_code_from_state_alpha_query(self.place_of_supply.code))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to create job order location")
@@ -210,8 +210,10 @@ class SaleOrderInherit(models.Model):
             cursor.close()
             connection.commit()
 
-        except Error as e:
+        except Error as err:
             _logger.error("evt=SEND_ORDER_TO_BETA msg=", exc_info=1)
+            raise UserError(_(err))
+        except Exception as e:
             raise UserError(_(e))
 
     def _create_customer_in_beta_if_not_exists(self):
