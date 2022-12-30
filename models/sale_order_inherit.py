@@ -327,6 +327,7 @@ class SaleOrderInherit(models.Model):
                 beta_branch_save_endpoint = self._get_branch_creation_endpoint()
 
                 response = requests.request("POST", beta_branch_save_endpoint, headers={'Content-Type': 'application/json'}, data=branch_data, verify=False)
+                response.raise_for_status()
 
                 if not response.ok:
                     raise UserError(_("Unable to save customer branch in beta."))
