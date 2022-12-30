@@ -212,7 +212,7 @@ class SaleOrderInherit(models.Model):
 
         except Error as e:
             _logger.error("evt=SEND_ORDER_TO_BETA msg=", exc_info=1)
-            raise e
+            raise UserError(_(e))
 
     def _create_customer_in_beta_if_not_exists(self):
         try:
@@ -320,7 +320,7 @@ class SaleOrderInherit(models.Model):
     def _create_branch_in_beta_if_not_exists(self):
         try:
             if not self.customer_branch.in_beta:
-                user_id = self.parent_id.user_id.login
+                user_id = self.partner_id.user_id.login
                 branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_id)
 
                 beta_branch_save_endpoint = self._get_branch_creation_endpoint()
