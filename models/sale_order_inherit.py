@@ -107,6 +107,16 @@ def _get_order_item_feed_details(job_order, quotation_items):
         })
     return item_feed_details
 
+def _get_beta_compatible_freight_type(freight_type):
+    frieght_map = {
+        'freight_type1': 'It has been agreed 1st Dispatch and final Pickup will be done by Youngman',
+        'freight_type2': 'It has been agreed 1st Dispatch will be done by Youngman and final Pickup will be done by Customer on his cost',
+        'freight_type3': 'It has been agreed 1st Dispatch will be done by Customer on his cost and final Pickup would be done by Youngman',
+        'freight_type4': 'It has been agreed 1st Dispatch will be done by Customer on his cost and final Pickup is already paid by Customer',
+        'freight_type5': 'It has been agreed 1st Dispatch and final Pickup will be done by Customer on his cost'
+    }
+
+    return frieght_map.get(freight_type)
 
 class SaleOrderInherit(models.Model):
     _inherit = 'sale.order'
@@ -504,7 +514,7 @@ class SaleOrderInherit(models.Model):
             'delivery_date': self.delivery_date.strftime('%Y-%m-%d'),
             'pickup_date': self.pickup_date.strftime('%Y-%m-%d'),
             'security_amt': self.security_amount if self.security_amount else 0.0,
-            'freight_payment': self.freight_paid_by,
+            'freight_payment': _get_beta_compatible_freight_type(self.freight_paid_by),
             'godown_id': beta_godown_id,
             'sign_type': 'MANUAL',
             'crm_account_id': self.id,
