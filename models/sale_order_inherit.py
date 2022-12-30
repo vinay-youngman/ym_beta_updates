@@ -399,6 +399,9 @@ class SaleOrderInherit(models.Model):
 
     def _get_quotation_items_and_total(self, quotation_id):
         quotation_items = []
+        if len(self.order_line) == 0:
+            raise UserError("Please select quotation items.")
+
         for order_line in self.order_line:
             quotation_items.append({
                 'quotation_id': quotation_id,
