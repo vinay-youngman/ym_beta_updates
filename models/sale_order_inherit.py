@@ -445,7 +445,7 @@ class SaleOrderInherit(models.Model):
         if self.partner_id.bill_submission_process.code in ['site',
                                                             'site_office'] and not self.site_bill_submission_godown:
             raise ValidationError(_("Site Bill submission godown is required."))
-        if self.partner_id.bill_submission_process.code in ['site',
+        if self.partner_id.bill_submission_process.code in ['office',
                                                             'site_office'] and not self.office_bill_submission_godown:
             raise ValidationError(_("Office Bill submission godown is required."))
         if self.partner_id.bill_submission_process.code in ['site', 'site_office'] and not self.bill_site_contact:
