@@ -24,11 +24,11 @@ def get_create_by(created_by_result):
         return created_by_result[0]
 
 
-def get_beta_customer_id(customer_id_result):
+def get_beta_customer_id_and_status(customer_id_result):
     if not customer_id_result or len(customer_id_result) == 0:
         raise UserError("This branch has not been created in beta")
     else:
-        return customer_id_result[0]
+        return customer_id_result[0], customer_id_result[1]
 
 
 def get_beta_godown_id(godown_result):
@@ -51,7 +51,7 @@ def get_beta_user_id_from_email_query():
 
 
 def get_beta_customer_id_from_gstn():
-    return "select id from customers where UPPER(gstn) = %s"
+    return "select id, status from customers where UPPER(gstn) = %s"
 
 
 def get_location_insert_query():
@@ -141,7 +141,10 @@ class SaleOrderInherit(models.Model):
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get customer id from beta")
             cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
-            customer_id = get_beta_customer_id(cursor.fetchone())
+            customer_id, status = get_beta_customer_id_and_status(cursor.fetchone())
+
+            if status != 'UNBLOCK':
+                raise UserError("This customer is in {} status".format(status))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get billing godown id from beta")
             cursor.execute(get_beta_godown_id_by_name_query(self.bill_godown.name))
@@ -485,11 +488,7 @@ class SaleOrderInherit(models.Model):
         }
 
     def _get_document_if_exists(self, field_name):
-        PREFIX = self.env['ir.config_parameter'].sudo().get_param('ym_beta_updates.file_save_bucket_url')
-
-        if not PREFIX:
-            raise UserError("file_save_bucket_url is not configured. Please reach out to system admins")
-
+        PREFIX = "s3://"
         attachment = self.env['ir.attachment'].sudo().search(
             [('res_model', '=', 'sale.order'), ('res_field', '=', field_name), ('res_id', '=', self.id)])
 
