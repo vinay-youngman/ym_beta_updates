@@ -215,8 +215,10 @@ class SaleOrderInherit(models.Model):
 
         except Error as err:
             _logger.error("evt=SEND_ORDER_TO_BETA msg=", exc_info=1)
+            connection.rollback()
             raise UserError(_(err))
         except Exception as e:
+            connection.rollback()
             raise UserError(_(e))
 
     def _create_customer_in_beta_if_not_exists(self):
@@ -242,34 +244,7 @@ class SaleOrderInherit(models.Model):
                 else:
                     due_days = [int(i) for i in payment_terms.split() if i.isdigit()][0]
 
-                payload = json.dumps({
-                    "partner": [
-                        {
-                            "id": master_customer.id,
-                            "name": master_customer.name,
-                            "vat": master_customer.vat,
-                            "email": master_customer.email,
-                            "phone": master_customer.phone,
-                            "street": master_customer.street,
-                            "street2": master_customer.street2,
-                            "city": master_customer.city,
-                            "zip": master_customer.zip,
-                            "business_type": master_customer.business_type.name,
-                            "is_company": master_customer.is_company,
-                            "rental_advance": master_customer.rental_advance,
-                            "rental_order": master_customer.rental_order,
-                            "security_cheque": master_customer.security_cheque,
-                            "user_id": user_id,
-                            "account_receivable": master_customer.account_receivable.email,
-                            "credit_limit": master_customer.credit_limit,
-                            "credit_rating": master_customer.credit_rating,
-                            "days_due": False if not due_days else str(due_days),
-                            "billing_process": master_customer.bill_submission_process.name
-
-                        }
-                    ],
-                    "branches": branches
-                })
+                payload = self._get_non_gst_customer_payload(branches, due_days, master_customer, user_id) if master_customer.is_non_gst_customer else self._get_gst_customer_payload(branches, due_days, master_customer, user_id)
 
                 beta_customer_save_endpoint = self._get_customer_creation_endpoint()
 
@@ -293,6 +268,54 @@ class SaleOrderInherit(models.Model):
             raise UserError("OOps:" + _(err))
         except Error as e:
             raise UserError(_(e))
+
+    def _get_gst_customer_payload(self, branches, due_days, master_customer, user_id):
+        payload = json.dumps({
+            "partner": [
+                {
+                    "id": master_customer.id,
+                    "is_non_gst": master_customer.is_non_gst_customer,
+                    "name": master_customer.name,
+                    "vat": master_customer.vat,
+                    "email": master_customer.email,
+                    "phone": master_customer.phone,
+                    "street": master_customer.street,
+                    "street2": master_customer.street2,
+                    "city": master_customer.city,
+                    "zip": master_customer.zip,
+                    "business_type": master_customer.business_type.name,
+                    "is_company": master_customer.is_company,
+                    "rental_advance": master_customer.rental_advance,
+                    "rental_order": master_customer.rental_order,
+                    "security_cheque": master_customer.security_cheque,
+                    "user_id": user_id,
+                    "account_receivable": master_customer.account_receivable.email,
+                    "credit_limit": master_customer.credit_limit,
+                    "credit_rating": master_customer.credit_rating,
+                    "days_due": False if not due_days else str(due_days),
+                    "billing_process": master_customer.bill_submission_process.name
+
+                }
+            ],
+            "branches": branches
+        })
+        return payload
+
+    def _get_non_gst_customer_payload(self, branches, due_days, master_customer, user_id):
+        payload = json.dumps({
+            'company' : master_customer.name,
+            'phone_number' : master_customer.phone,
+            'email' : master_customer.email,
+            'billing_address_line' : _concatenate_address_string(master_customer.street,master_customer.street2),
+            'billing_address_city' : master_customer.city if master_customer.city else "",
+            'billing_address_pincode' : master_customer.zip,
+            'mailing_address_line' : _concatenate_address_string(master_customer.street,master_customer.street2),
+            'mailing_address_city' : master_customer.city if master_customer.city else "",
+            'mailing_address_pincode' : master_customer.zip,
+            'is_non_gst': master_customer.is_non_gst_customer,
+
+        })
+        return payload
 
     def _get_customer_creation_endpoint(self):
         beta_customer_save_endpoint = self.env['ir.config_parameter'].sudo().get_param(
