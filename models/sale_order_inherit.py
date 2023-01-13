@@ -63,8 +63,8 @@ def get_state_code_from_state_alpha_query(state_code):
 
 
 def get_order_insert_query():
-    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, freight_amount, billing_godown, created_by, total, is_authorized, created_at, updated_at) " \
-           "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(freight_amount)s, %(billing_godown)s, %(created_by)s, %(total)s, %(is_authorized)s,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, billing_godown, created_by, total, is_authorized, created_at, updated_at) " \
+           "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(billing_godown)s, %(created_by)s, %(total)s, %(is_authorized)s,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
 
 
 def get_beta_godown_id_by_name_query(godown_name):
@@ -479,7 +479,6 @@ class SaleOrderInherit(models.Model):
             'rental_advance': self._get_document_if_exists('rental_advance'),
             'rental_order': self._get_document_if_exists('rental_order'),
             'godown_id': beta_godown_id,
-            'freight_amount': self.freight_amount,
             'billing_godown': beta_bill_godown_id,
             'created_by': created_by,
             'total': quotation_total,
