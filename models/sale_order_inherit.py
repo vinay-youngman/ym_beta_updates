@@ -28,7 +28,7 @@ def get_beta_customer_id_and_status(customer_id_result):
     if not customer_id_result or len(customer_id_result) == 0:
         raise UserError("This branch has not been created in beta")
     else:
-        return customer_id_result[0], customer_id_result[1]
+        return customer_id_result[0][0], customer_id_result[0][1]
 
 
 def get_beta_godown_id(godown_result):
@@ -141,7 +141,7 @@ class SaleOrderInherit(models.Model):
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get customer id from beta")
             cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
-            customer_id, status = get_beta_customer_id_and_status(cursor.fetchone())
+            customer_id, status = get_beta_customer_id_and_status(cursor.fetchall())
 
             if status != 'UNBLOCK':
                 raise UserError("This customer is in {} status".format(status))
