@@ -487,19 +487,18 @@ class SaleOrderInherit(models.Model):
         }
 
     def _get_document_if_exists(self, field_name):
-        PREFIX = "s3://"
         attachment = self.env['ir.attachment'].sudo().search(
-            [('res_model', '=', 'sale.order'), ('res_field', '=', field_name), ('res_id', '=', self.id)])
+            [('res_model', '=', 'sale.order'), ('res_field', '=', field_name), ('res_id', '=', self.id), ('type', '=', 'url')])
 
-        fname = attachment.store_fname if attachment else ""
+        if not attachment:
+            return None
+
+        fname = attachment.url if attachment else ""
         mimetype = attachment.mimetype if attachment else ""
 
         extension = mimetypes.guess_extension(mimetype, strict=True)
 
-        if fname.startswith(PREFIX):
-            return fname[len(PREFIX):] + extension if extension else ""
-
-        return None
+        return fname[len("https://youngmanbeta.s3.amazonaws.com/"):] + extension if extension else ""
 
     def _get_quotation_data(self, created_by, customer_id, beta_godown_id, quotation_total):
         return {
