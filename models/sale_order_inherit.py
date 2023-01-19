@@ -53,6 +53,29 @@ def get_beta_user_id_from_email_query():
 def get_beta_customer_id_from_gstn():
     return "select id, status from customers where UPPER(gstn) = %s"
 
+def get_beta_branch_form_gstn_query():
+    return "select id from customers where UPPER(gstn) = %s"
+
+def check_existing_customer_beta(gstn):
+    try:
+        connection = self._get_connection()
+        connection.autocommit = False
+        cursor = connection.cursor()
+
+        cursor.execute(get_beta_branch_form_gstn_query(), [gstn])
+        ids = cursor.fetchone()
+        cursor.close()
+        connection.commit()
+        if ids is not null:
+            return True
+        else:
+            return False
+
+    except Error as err:
+        raise UserError(_(err))
+    except Exception as e:
+        raise UserError(_(e))
+
 
 def get_location_insert_query():
     return "INSERT INTO locations (location_name, type, state_code) VALUES (%s, 'job_order', %s)"
@@ -326,18 +349,21 @@ class SaleOrderInherit(models.Model):
     def _create_branch_in_beta_if_not_exists(self):
         try:
             if not self.customer_branch.in_beta:
-                user_id = self.partner_id.user_id.login
-                branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_id)
-
-                beta_branch_save_endpoint = self._get_branch_creation_endpoint()
-
-                response = requests.request("POST", beta_branch_save_endpoint, headers={'Content-Type': 'application/json'}, data=branch_data, verify=False)
-                response.raise_for_status()
-
-                if not response.ok:
-                    raise UserError(_("Unable to save customer branch in beta."))
-                else:
+                if check_existing_customer_beta(self.gstn):
                     self.customer_branch.in_beta = True
+                else:
+                    user_id = self.partner_id.user_id.login
+                    branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_id)
+
+                    beta_branch_save_endpoint = self._get_branch_creation_endpoint()
+
+                    response = requests.request("POST", beta_branch_save_endpoint, headers={'Content-Type': 'application/json'}, data=branch_data, verify=False)
+                    response.raise_for_status()
+
+                    if not response.ok:
+                        raise UserError(_("Unable to save customer branch in beta."))
+                    else:
+                        self.customer_branch.in_beta = True
         except requests.exceptions.HTTPError as errh:
             raise UserError("Http Error:" + _(errh))
         except requests.exceptions.ConnectionError as errc:
