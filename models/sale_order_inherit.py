@@ -519,12 +519,9 @@ class SaleOrderInherit(models.Model):
         if not attachment:
             return None
 
-        fname = attachment.url if attachment else ""
-        mimetype = attachment.mimetype if attachment else ""
+        fname = attachment.url
 
-        extension = mimetypes.guess_extension(mimetype, strict=True)
-
-        return fname[len("https://youngmanbeta.s3.amazonaws.com/"):] + extension if extension else ""
+        return fname[len("https://youngmanbeta.s3.amazonaws.com/"):] if fname else None
 
     def _get_quotation_data(self, created_by, customer_id, beta_godown_id, quotation_total):
         return {
