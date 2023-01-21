@@ -493,8 +493,8 @@ class SaleOrderInherit(models.Model):
         if not attachment:
             return None
 
-        fname = attachment.url if attachment else ""
-        mimetype = attachment.mimetype if attachment else ""
+        fname = attachment.url
+        mimetype = attachment.mimetype
 
         extension = mimetypes.guess_extension(mimetype, strict=True)
 
