@@ -56,26 +56,6 @@ def get_beta_customer_id_from_gstn():
 def get_beta_branch_form_gstn_query():
     return "select id from customers where UPPER(gstn) = %s"
 
-def check_existing_customer_beta(gstn):
-    try:
-        connection = self._get_connection()
-        connection.autocommit = False
-        cursor = connection.cursor()
-
-        cursor.execute(get_beta_branch_form_gstn_query(), [gstn])
-        ids = cursor.fetchone()
-        cursor.close()
-        connection.commit()
-        if ids is not null:
-            return True
-        else:
-            return False
-
-    except Error as err:
-        raise UserError(_(err))
-    except Exception as e:
-        raise UserError(_(e))
-
 
 def get_location_insert_query():
     return "INSERT INTO locations (location_name, type, state_code) VALUES (%s, 'job_order', %s)"
@@ -252,7 +232,7 @@ class SaleOrderInherit(models.Model):
 
                 branches = []
                 for branch in master_customer.branch_ids:
-                    branch_data = self._get_branch_data_for_saving_in_beta(branch, user_id)
+                    branch_data = self._get_branch_data_for_saving_in_beta(branch, user_id,None)
                     branches.append(branch_data)
 
 
@@ -324,13 +304,14 @@ class SaleOrderInherit(models.Model):
             raise UserError(_("Beta save customer endpoint is not configured. Please reach out to system admins."))
         return beta_customer_save_endpoint
 
-    def _get_branch_data_for_saving_in_beta(self, branch, user_id):
+    def _get_branch_data_for_saving_in_beta(self, branch, user_id, customer_id):
         branch_data = {
             "odoo_branch_id": branch.id,
-            "branch_name": branch.name,
+            "company": branch.name,
             "gstn": branch.gstn,
             "email": branch.email,
-            "phone": branch.phone,
+            "first_name":branch.branch_contact_name,
+            "phone_number": branch.phone,
             "mobile": branch.mobile,
             "user_id": user_id,
             "bde": branch.bde.email,
@@ -344,20 +325,28 @@ class SaleOrderInherit(models.Model):
             "mailing_address_city": branch.mailing_city,
             "mailing_address_pincode": branch.mailing_zip
         }
+
+        if customer_id:
+            branch_data["master_id"] = customer_id
+
         return branch_data
 
     def _create_branch_in_beta_if_not_exists(self):
         try:
             if not self.customer_branch.in_beta:
-                if check_existing_customer_beta(self.gstn):
+                if self.check_existing_customer_beta(self.customer_branch.gstn):
                     self.customer_branch.in_beta = True
                 else:
-                    user_id = self.partner_id.user_id.login
-                    branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_id)
+                    user_email = self.partner_id.user_id.login
+                    connection = self._get_connection()
+                    cursor = connection.cursor()# 'select id, status from customers where UPPER(gstn) = %s'
+                    cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
+                    customer_id, status = get_beta_customer_id_and_status(cursor.fetchall())
+                    branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_email, customer_id)
 
                     beta_branch_save_endpoint = self._get_branch_creation_endpoint()
 
-                    response = requests.request("POST", beta_branch_save_endpoint, headers={'Content-Type': 'application/json'}, data=branch_data, verify=False)
+                    response = requests.request("POST", beta_branch_save_endpoint, headers={'Content-Type': 'application/json'}, data=json.dumps(branch_data), verify=False)
                     response.raise_for_status()
 
                     if not response.ok:
@@ -374,6 +363,8 @@ class SaleOrderInherit(models.Model):
             raise UserError("OOps:" + _(err))
         except Error as e:
             raise UserError(_(e))
+        finally:
+            cursor.close()
 
     def _get_branch_creation_endpoint(self):
         beta_branch_save_endpoint = self.env['ir.config_parameter'].sudo().get_param(
@@ -492,6 +483,23 @@ class SaleOrderInherit(models.Model):
             created_by) + "/" + str(customer_id) + "/" + self.po_number + "/" + str(quotation_id)
         return job_order_number
 
+    def check_existing_customer_beta(self, gstn):
+        try:
+            connection = self._get_connection()
+            cursor = connection.cursor()
+            cursor.execute(get_beta_branch_form_gstn_query(), [gstn])
+            ids = cursor.fetchall()
+            if ids and len(ids)>0:
+                return True
+            else:
+                return False
+
+        except Error as err:
+            raise UserError(_(err))
+        except Exception as e:
+            raise UserError(_(e))
+        finally:
+            cursor.close()
     def _get_order_data(self, created_by, customer_id, quotation_id, quotation_total, job_order_number,
                         place_of_supply_code, beta_bill_godown_id, beta_godown_id, is_authorized):
         return {
