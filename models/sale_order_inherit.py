@@ -23,6 +23,11 @@ def get_create_by(created_by_result):
     else:
         return created_by_result[0]
 
+def get_beta_customer_master_id(customer_master_result):
+    if not customer_master_result or len(customer_master_result) ==0:
+        raise UserError("Master customer for this branch does not exist in beta")
+    else:
+        return customer_master_result[0][0]
 
 def get_beta_customer_id_and_status(customer_id_result):
     if not customer_id_result or len(customer_id_result) == 0:
@@ -49,7 +54,8 @@ def get_quotation_items_insert_query():
 def get_beta_user_id_from_email_query():
     return "select id from users where LOWER(email) = %s"
 
-
+def get_customer_master_id_from_pan():
+    return "select id from customer_masters where UPPER(pan) = %s"
 def get_beta_customer_id_from_gstn():
     return "select id, status from customers where UPPER(gstn) = %s"
 
@@ -296,7 +302,6 @@ class SaleOrderInherit(models.Model):
             raise UserError("OOps:" + _(err))
         except Error as e:
             raise UserError(_(e))
-
     def _get_customer_creation_endpoint(self):
         beta_customer_save_endpoint = self.env['ir.config_parameter'].sudo().get_param(
             'ym_beta_updates.beta_customer_save_endpoint')
@@ -304,7 +309,7 @@ class SaleOrderInherit(models.Model):
             raise UserError(_("Beta save customer endpoint is not configured. Please reach out to system admins."))
         return beta_customer_save_endpoint
 
-    def _get_branch_data_for_saving_in_beta(self, branch, user_id, customer_id):
+    def _get_branch_data_for_saving_in_beta(self, branch, user_id, customer_master_id):
         branch_data = {
             "odoo_branch_id": branch.id,
             "company": branch.name,
@@ -326,23 +331,23 @@ class SaleOrderInherit(models.Model):
             "mailing_address_pincode": branch.mailing_zip
         }
 
-        if customer_id:
-            branch_data["master_id"] = customer_id
+        if customer_master_id:
+            branch_data["master_id"] = customer_master_id
 
         return branch_data
 
     def _create_branch_in_beta_if_not_exists(self):
         try:
+            connection = self._get_connection()
+            cursor = connection.cursor()
             if not self.customer_branch.in_beta:
                 if self.check_existing_customer_beta(self.customer_branch.gstn):
                     self.customer_branch.in_beta = True
                 else:
                     user_email = self.partner_id.user_id.login
-                    connection = self._get_connection()
-                    cursor = connection.cursor()# 'select id, status from customers where UPPER(gstn) = %s'
-                    cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
-                    customer_id, status = get_beta_customer_id_and_status(cursor.fetchall())
-                    branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_email, customer_id)
+                    cursor.execute(get_customer_master_id_from_pan(), [self.partner_id.vat])
+                    customer_master_id = get_beta_customer_master_id(cursor.fetchall())
+                    branch_data = self._get_branch_data_for_saving_in_beta(self.customer_branch, user_email, customer_master_id)
 
                     beta_branch_save_endpoint = self._get_branch_creation_endpoint()
 
