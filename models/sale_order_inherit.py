@@ -75,6 +75,8 @@ def get_order_insert_query():
     return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, billing_godown, created_by, total, is_authorized, created_at, updated_at) " \
            "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(billing_godown)s, %(created_by)s, %(total)s, %(is_authorized)s,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
 
+def _get_cheque_details_insert_query():
+    return "INSERT INTO customer_security_cheque (customer_id, order_id, cheque_no, cheque_amount, cheque_date,bank, lapsed, verified, cheque_ownership, security_cheque) VALUES(%(customer_id)s, %(order_id)s, %(cheque_no)s, %(cheque_amount)s, %(cheque_date)s, %(bank)s, %(lapsed)s, %(verified)s, %(cheque_ownership)s, %(security_cheque)s)"
 
 def get_beta_godown_id_by_name_query(godown_name):
     return "SELECT id from locations where type='godown' and location_name = '{}'".format(godown_name)
@@ -195,6 +197,9 @@ class SaleOrderInherit(models.Model):
             cursor.execute(get_order_insert_query(), order_data)
             order_id = cursor.lastrowid
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
+
+            if self.security_cheque:
+                cursor.execute(self._get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, created_by))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
             cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.po_amount, self.po_amount))
@@ -519,6 +524,9 @@ class SaleOrderInherit(models.Model):
         if not self.partner_id.credit_rating:
             raise ValidationError(_("Credit Rating for master customer is not available."))
 
+        if self.security_cheque and not (self.cheque_number or self.cheque_amount or self.cheque_date or self.bank):
+            raise ValidationError(_("Please enter security cheque details"))
+
     def _generate_job_number(self, created_by, customer_id, quotation_id):
         today = datetime.date.today()
         job_order_number = str(today.year) + "/" + today.strftime("%b") + "/" + self.jobsite_id.name + "/" + str(
@@ -542,6 +550,21 @@ class SaleOrderInherit(models.Model):
             raise UserError(_(e))
         finally:
             cursor.close()
+
+    def _get_security_cheque_data(self, customer_id, order_id, account_manager):
+        return {
+            'customer_id': customer_id,
+            'order_id': order_id,
+            'cheque_no': self.cheque_number,
+            'cheque_amount': self.cheque_amount,
+            'cheque_date' : self.cheque_date.strftime('%Y-%m-%d'),
+            'bank': self.bank,
+            'lapsed': 0,
+            'verified': 0,
+            'cheque_ownership': account_manager,
+            'security_cheque': self._get_document_if_exists('security_cheque')
+        }
+
     def _get_order_data(self, created_by, customer_id, quotation_id, quotation_total, job_order_number,
                         place_of_supply_code, beta_bill_godown_id, beta_godown_id, is_authorized):
         return {
