@@ -199,7 +199,7 @@ class SaleOrderInherit(models.Model):
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
             if self.security_cheque:
-                cursor.execute(self._get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, created_by))
+                cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, created_by))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
             cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.po_amount, self.po_amount))
