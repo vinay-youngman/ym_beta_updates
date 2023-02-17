@@ -317,29 +317,34 @@ class SaleOrderInherit(models.Model):
 
     def _get_non_gst_customer_payload(self, branches, due_days, master_customer, user_id):
         payload = json.dumps({
-            'company' : master_customer.name,
-            'first_name' : False,
-            'last_name' : False,
-            'business_type' : False,
-            'phone_number' : master_customer.phone,
-            'email' : master_customer.email,
-            'purchase_firstname' : False,
-            'purchase_lastname' : False,
-            'purchase_email' : False,
-            'purchase_phone_number' : False,
-            'billing_address_line' : _concatenate_address_string([master_customer.sale_order_ids.billing_street , master_customer.sale_order_ids.billing_street2 if master_customer.sale_order_ids.billing_street + master_customer.sale_order_ids.billing_street2 else False]),
-            'billing_address_city' : master_customer.sale_order_ids.billing_city if master_customer.sale_order_ids.billing_city else "",
-            'billing_address_pincode' : master_customer.sale_order_ids.billing_zip,
-            'billing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
-            'mailing_address_line' : _concatenate_address_string([master_customer.street , master_customer.street2]),
-            'mailing_address_city' : master_customer.city if master_customer.city else "",
-            'mailing_address_pincode' : master_customer.zip,
-            'mailing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
-            'security_letter' : master_customer.security_cheque,
-            'rental_advance' : master_customer.rental_advance,
-            'rental_order' : master_customer.rental_order,
-            'security_cheque' : master_customer.security_cheque,
-            'is_non_gst': master_customer.is_non_gst_customer,
+            "partner": [
+                {
+                    'company' : master_customer.name,
+                    'first_name' : False,
+                    'last_name' : False,
+                    'business_type' : False,
+                    'phone_number' : master_customer.phone,
+                    'email' : master_customer.email,
+                    'purchase_firstname' : False,
+                    'purchase_lastname' : False,
+                    'purchase_email' : False,
+                    'purchase_phone_number' : False,
+                    'billing_address_line' : False,
+                    'billing_address_city' : "",
+                    'billing_address_pincode' : "",
+                    'billing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
+                    'mailing_address_line' : _concatenate_address_string([master_customer.street , master_customer.street2]),
+                    'mailing_address_city' : master_customer.city if master_customer.city else "",
+                    'mailing_address_pincode' : master_customer.zip,
+                    'mailing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
+                    'security_letter' : master_customer.security_cheque,
+                    'rental_advance' : master_customer.rental_advance,
+                    'rental_order' : master_customer.rental_order,
+                    'security_cheque' : master_customer.security_cheque,
+                    'is_non_gst': master_customer.is_non_gst_customer,
+                }
+            ],
+            "branches": branches
 
         })
         return payload
