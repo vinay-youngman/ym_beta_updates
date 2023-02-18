@@ -147,6 +147,8 @@ class SaleOrderInherit(models.Model):
             cursor.execute(get_beta_user_id_from_email_query(), [email])
             created_by = get_create_by(cursor.fetchone())
 
+            cheque_ownership = created_by
+
             if self.partner_id.team_id.name == 'INSIDE SALES':
                 created_by = 568
 
@@ -199,7 +201,7 @@ class SaleOrderInherit(models.Model):
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
             if self.security_cheque:
-                cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, created_by))
+                cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, cheque_ownership))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
             cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.po_amount, self.po_amount))
