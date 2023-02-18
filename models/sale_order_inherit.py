@@ -531,7 +531,7 @@ class SaleOrderInherit(models.Model):
         if not self.partner_id.credit_rating:
             raise ValidationError(_("Credit Rating for master customer is not available."))
 
-        if self.security_cheque and not (self.cheque_number or self.cheque_amount or self.cheque_date or self.bank):
+        if self.security_cheque and not (self.cheque_number or self.cheque_amount or self.bank):
             raise ValidationError(_("Please enter security cheque details"))
 
     def _generate_job_number(self, created_by, customer_id, quotation_id):
@@ -564,7 +564,7 @@ class SaleOrderInherit(models.Model):
             'order_id': order_id,
             'cheque_no': self.cheque_number,
             'cheque_amount': self.cheque_amount,
-            'cheque_date' : self.cheque_date.strftime('%Y-%m-%d'),
+            'cheque_date' : self.cheque_date.strftime('%Y-%m-%d') if self.cheque_date else None,
             'bank': self.bank,
             'lapsed': 0,
             'verified': 0,
