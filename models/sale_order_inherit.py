@@ -275,15 +275,15 @@ class SaleOrderInherit(models.Model):
                         branch.in_beta = True
 
         except requests.exceptions.HTTPError as errh:
-            raise UserError("Http Error:" + _(errh))
+            raise UserError("Http Error:" + str(errh))
         except requests.exceptions.ConnectionError as errc:
-            raise UserError("Error Connecting:" + _(errc))
+            raise UserError("Error Connecting:" + str(errc))
         except requests.exceptions.Timeout as errt:
-            raise UserError("Timeout Error:" + _(errt))
+            raise UserError("Timeout Error:" + str(errt))
         except requests.exceptions.RequestException as err:
-            raise UserError("OOps:" + _(err))
+            raise UserError("OOps:" + str(err))
         except Error as e:
-            raise UserError(_(e))
+            raise UserError(str(e))
 
     def _get_gst_customer_payload(self, branches, due_days, master_customer, user_id):
         payload = json.dumps({
