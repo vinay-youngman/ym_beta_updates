@@ -201,8 +201,11 @@ class SaleOrderInherit(models.Model):
             order_id = cursor.lastrowid
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
-            cursor.executemany(_get_contact_notification_insert_query(), self._get_contacts_to_notify(order_id))
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saved contacts to notify")
+            try:
+                cursor.executemany(_get_contact_notification_insert_query(), self._get_contacts_to_notify(order_id))
+                _logger.info("evt=SEND_ORDER_TO_BETA msg=Saved contacts to notify")
+            except Error as err:
+                _logger.error("evt=SEND_ORDER_TO_BETA msg="+str(err))
 
             if self.security_cheque:
                 cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, created_by))
