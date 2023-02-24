@@ -150,6 +150,8 @@ class SaleOrderInherit(models.Model):
             cursor.execute(get_beta_user_id_from_email_query(), [email])
             created_by = get_create_by(cursor.fetchone())
 
+            cheque_ownership = created_by
+
             if self.partner_id.team_id.name == 'INSIDE SALES':
                 created_by = 568
 
@@ -208,7 +210,7 @@ class SaleOrderInherit(models.Model):
                 _logger.error("evt=SEND_ORDER_TO_BETA msg="+str(err))
 
             if self.security_cheque:
-                cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, created_by))
+                cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, cheque_ownership))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
             cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.po_amount, self.po_amount))
@@ -332,29 +334,34 @@ class SaleOrderInherit(models.Model):
 
     def _get_non_gst_customer_payload(self, branches, due_days, master_customer, user_id):
         payload = json.dumps({
-            'company' : master_customer.name,
-            'first_name' : False,
-            'last_name' : False,
-            'business_type' : False,
-            'phone_number' : master_customer.phone,
-            'email' : master_customer.email,
-            'purchase_firstname' : False,
-            'purchase_lastname' : False,
-            'purchase_email' : False,
-            'purchase_phone_number' : False,
-            'billing_address_line' : _concatenate_address_string([master_customer.sale_order_ids.billing_street , master_customer.sale_order_ids.billing_street2 if master_customer.sale_order_ids.billing_street + master_customer.sale_order_ids.billing_street2 else False]),
-            'billing_address_city' : master_customer.sale_order_ids.billing_city if master_customer.sale_order_ids.billing_city else "",
-            'billing_address_pincode' : master_customer.sale_order_ids.billing_zip,
-            'billing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
-            'mailing_address_line' : _concatenate_address_string([master_customer.street , master_customer.street2]),
-            'mailing_address_city' : master_customer.city if master_customer.city else "",
-            'mailing_address_pincode' : master_customer.zip,
-            'mailing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
-            'security_letter' : master_customer.security_cheque,
-            'rental_advance' : master_customer.rental_advance,
-            'rental_order' : master_customer.rental_order,
-            'security_cheque' : master_customer.security_cheque,
-            'is_non_gst': master_customer.is_non_gst_customer,
+            "partner": [
+                {
+                    'company' : master_customer.name,
+                    'first_name' : False,
+                    'last_name' : False,
+                    'business_type' : False,
+                    'phone_number' : master_customer.phone,
+                    'email' : master_customer.email,
+                    'purchase_firstname' : False,
+                    'purchase_lastname' : False,
+                    'purchase_email' : False,
+                    'purchase_phone_number' : False,
+                    'billing_address_line' : False,
+                    'billing_address_city' : "",
+                    'billing_address_pincode' : "",
+                    'billing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
+                    'mailing_address_line' : _concatenate_address_string([master_customer.street , master_customer.street2]),
+                    'mailing_address_city' : master_customer.city if master_customer.city else "",
+                    'mailing_address_pincode' : master_customer.zip,
+                    'mailing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
+                    'security_letter' : master_customer.security_cheque,
+                    'rental_advance' : master_customer.rental_advance,
+                    'rental_order' : master_customer.rental_order,
+                    'security_cheque' : master_customer.security_cheque,
+                    'is_non_gst': master_customer.is_non_gst_customer,
+                }
+            ],
+            "branches": branches
 
         })
         return payload
@@ -539,7 +546,7 @@ class SaleOrderInherit(models.Model):
         if not self.partner_id.credit_rating:
             raise ValidationError(_("Credit Rating for master customer is not available."))
 
-        if self.security_cheque and not (self.cheque_number or self.cheque_amount or self.cheque_date or self.bank):
+        if self.security_cheque and not (self.cheque_number or self.cheque_amount or self.bank):
             raise ValidationError(_("Please enter security cheque details"))
 
     def _generate_job_number(self, created_by, customer_id, quotation_id):
@@ -572,7 +579,7 @@ class SaleOrderInherit(models.Model):
             'order_id': order_id,
             'cheque_no': self.cheque_number,
             'cheque_amount': self.cheque_amount,
-            'cheque_date' : self.cheque_date.strftime('%Y-%m-%d'),
+            'cheque_date' : self.cheque_date.strftime('%Y-%m-%d') if self.cheque_date else None,
             'bank': self.bank,
             'lapsed': 0,
             'verified': 0,
