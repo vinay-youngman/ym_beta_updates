@@ -78,6 +78,9 @@ def get_order_insert_query():
 def _get_cheque_details_insert_query():
     return "INSERT INTO customer_security_cheque (customer_id, order_id, cheque_no, cheque_amount, cheque_date,bank, lapsed, verified, cheque_ownership, security_cheque) VALUES(%(customer_id)s, %(order_id)s, %(cheque_no)s, %(cheque_amount)s, %(cheque_date)s, %(bank)s, %(lapsed)s, %(verified)s, %(cheque_ownership)s, %(security_cheque)s)"
 
+def _get_contact_notification_insert_query():
+    return "INSERT INTO order_contact_notification (order_id, contact_crm_id) VALUES(%(order_id)s, %(contact_crm_id)s)"
+
 def get_beta_godown_id_by_name_query(godown_name):
     return "SELECT id from locations where type='godown' and location_name = '{}'".format(godown_name)
 
@@ -198,6 +201,9 @@ class SaleOrderInherit(models.Model):
             order_id = cursor.lastrowid
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
+            cursor.executemany(_get_contact_notification_insert_query(), self._get_contacts_to_notify(order_id))
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saved contacts to notify")
+
             if self.security_cheque:
                 cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, created_by))
 
@@ -234,6 +240,12 @@ class SaleOrderInherit(models.Model):
         except Exception as e:
             connection.rollback()
             raise UserError(_(e))
+
+    def _get_contacts_to_notify(self, order_id):
+        return [
+            {'contact_crm_id': self.purchaser_name.id, 'order_id': order_id},
+            {'contact_crm_id': self.site_contact_name.id, 'order_id': order_id}
+        ]
 
     def _create_customer_in_beta_if_not_exists(self):
         try:
