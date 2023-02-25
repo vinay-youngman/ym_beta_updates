@@ -336,7 +336,9 @@ class SaleOrderInherit(models.Model):
         payload = json.dumps({
             "partner": [
                 {
+                    'id': master_customer.id,
                     'company' : master_customer.name,
+                    'pan' : master_customer.vat,
                     'first_name' : False,
                     'last_name' : False,
                     'business_type' : False,
@@ -347,6 +349,8 @@ class SaleOrderInherit(models.Model):
                     'purchase_email' : False,
                     'purchase_phone_number' : False,
                     'billing_address_line' : False,
+                    "user_id": user_id,
+                    "account_receivable": master_customer.account_receivable.email,
                     'billing_address_city' : "",
                     'billing_address_pincode' : "",
                     'billing_address_state': str(master_customer.state_id.code + "|" + master_customer.state_id.name),
@@ -358,6 +362,7 @@ class SaleOrderInherit(models.Model):
                     'rental_advance' : master_customer.rental_advance,
                     'rental_order' : master_customer.rental_order,
                     'security_cheque' : master_customer.security_cheque,
+                    "billing_process": master_customer.bill_submission_process.name,
                     'is_non_gst': master_customer.is_non_gst_customer,
                 }
             ],
