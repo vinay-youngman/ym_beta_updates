@@ -56,8 +56,12 @@ def get_beta_user_id_from_email_query():
 
 def get_customer_master_id_from_pan():
     return "select id from customer_masters where UPPER(pan) = %s"
+
 def get_beta_customer_id_from_gstn():
     return "select id, status from customers where UPPER(gstn) = %s"
+
+def get_beta_customer_id_for_non_gst_customer():
+    return "select customers.id as id, customers.status as status from customers, customer_masters where customer_masters.id = customers.customer_master_id and customer_masters.pan = %s limit 1"
 
 def get_beta_branch_form_gstn_query():
     return "select id from customers where UPPER(gstn) = %s"
@@ -156,7 +160,11 @@ class SaleOrderInherit(models.Model):
                 created_by = 568
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get customer id from beta")
-            cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
+
+            if self.partner_id.is_non_gst_customer:
+                cursor.execute(get_beta_customer_id_for_non_gst_customer(), [self.partner_id.vat])
+            else:
+                cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
             customer_id, status = get_beta_customer_id_and_status(cursor.fetchall())
 
             if status != 'UNBLOCK':
@@ -407,6 +415,9 @@ class SaleOrderInherit(models.Model):
 
     def _create_branch_in_beta_if_not_exists(self):
         try:
+            if self.partner_id.is_non_gst_customer:
+                return
+
             connection = self._get_connection()
             cursor = connection.cursor()
             if not self.customer_branch.in_beta:
