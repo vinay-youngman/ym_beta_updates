@@ -415,8 +415,8 @@ class SaleOrderInherit(models.Model):
 
     def _create_branch_in_beta_if_not_exists(self):
         try:
-            if self.partner_id.is_non_gst_customer:
-                return
+            #if self.partner_id.is_non_gst_customer:
+            #    return
 
             connection = self._get_connection()
             cursor = connection.cursor()
