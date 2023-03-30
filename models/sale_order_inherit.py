@@ -414,6 +414,7 @@ class SaleOrderInherit(models.Model):
         return branch_data
 
     def _create_branch_in_beta_if_not_exists(self):
+        cursor = None
         try:
             #if self.partner_id.is_non_gst_customer:
             #    return
@@ -449,7 +450,8 @@ class SaleOrderInherit(models.Model):
         except Error as e:
             raise UserError(_(e))
         finally:
-            cursor.close()
+            if cursor is not None:
+                cursor.close()
 
     def _get_branch_creation_endpoint(self):
         beta_branch_save_endpoint = self.env['ir.config_parameter'].sudo().get_param(
@@ -489,15 +491,17 @@ class SaleOrderInherit(models.Model):
 
     def _generate_po_details(self, order_id, quotation_items):
         po_details = []
-        for item in quotation_items:
-            po_details.append({
-                'order_id': order_id,
-                'po_no': self.po_number,
-                'po_date': self.po_date.strftime('%Y-%m-%d'),
-                'po_amount': self.po_amount,
-                'item_code': item['item_code'],
-                'quantity': item['quantity'],
-            })
+
+        if self.po_number:
+            for item in quotation_items:
+                po_details.append({
+                    'order_id': order_id,
+                    'po_no': self.po_number,
+                    'po_date': self.po_date.strftime('%Y-%m-%d'),
+                    'po_amount': self.po_amount,
+                    'item_code': item['item_code'],
+                    'quantity': item['quantity'],
+                })
         return po_details
 
     def _get_quotation_total(self):
@@ -521,54 +525,59 @@ class SaleOrderInherit(models.Model):
         return quotation_items
 
     def _validate_order_before_confirming(self):
-        if self.tentative_quo:
-            raise ValidationError(_("Confirmation of tentative quotation is not allowed"))
-        if not self.po_number:
-            raise ValidationError(_('PO Number is mandatory for confirming a quotation'))
-        if not self.po_amount:
-            raise ValidationError(_('PO Amount is mandatory for confirming a quotation'))
-        if not self.po_date:
-            raise ValidationError(_('PO Date is mandatory for confirming a quotation'))
-        if not self.place_of_supply:
-            raise ValidationError(_('Place of Supply is mandatory for confirming a quotation'))
-        if not self.rental_order and self.customer_branch.rental_order is True:
-            raise ValidationError(_('Rental Order is mandatory for this customer'))
-        if not self.rental_advance and self.customer_branch.rental_advance is True:
-            raise ValidationError(_('Rental Advance is mandatory for this customer'))
-        if not self.security_cheque and self.customer_branch.security_cheque is True:
-            raise ValidationError(_('Security Cheque is mandatory for this customer'))
-        if not self.partner_id.vat:
-            raise ValidationError(_("This customer does not have a PAN. Please check customer details"))
-        if not self.partner_id.bill_submission_process:
-            raise ValidationError(
-                _("This customer does not have a Bill submission process defined. Please check customer details"))
-        if self.partner_id.bill_submission_process.code == 'email' and not self.bill_submission_email:
-            raise ValidationError(_("Bill submission email is required."))
-        if self.partner_id.bill_submission_process.code in ['site',
-                                                            'site_office'] and not self.site_bill_submission_godown:
-            raise ValidationError(_("Site Bill submission godown is required."))
-        if self.partner_id.bill_submission_process.code in ['office',
-                                                            'site_office'] and not self.office_bill_submission_godown:
-            raise ValidationError(_("Office Bill submission godown is required."))
-        if self.partner_id.bill_submission_process.code in ['site', 'site_office'] and not self.bill_site_contact:
-            raise ValidationError(_("Bill Site Contact is required."))
-        if self.partner_id.bill_submission_process.code in ['office', 'site_office'] and not self.bill_office_contact:
-            raise ValidationError(_("Customer Bill Submission Office Contac"))
-        if self.partner_id.bill_submission_process.code in ['office',
-                                                            'site_office'] and not self.bill_submission_office_branch:
-            raise ValidationError(_("Bill Submission Office Branch is required."))
-        if not self.partner_id.team_id:
-            raise ValidationError(_("Sales team for master customer is not available."))
-        if not self.partner_id.credit_rating:
-            raise ValidationError(_("Credit Rating for master customer is not available."))
+        if  self.order_type == 'RENTAL':
+            if self.tentative_quo:
+                raise ValidationError(_("Confirmation of tentative quotation is not allowed"))
+            if not self.po_number:
+                raise ValidationError(_('PO Number is mandatory for confirming a quotation'))
+            if not self.po_amount:
+                raise ValidationError(_('PO Amount is mandatory for confirming a quotation'))
+            if not self.po_date:
+                raise ValidationError(_('PO Date is mandatory for confirming a quotation'))
+            if not self.place_of_supply:
+                raise ValidationError(_('Place of Supply is mandatory for confirming a quotation'))
+            if not self.rental_order and self.customer_branch.rental_order is True:
+                raise ValidationError(_('Rental Order is mandatory for this customer'))
+            if not self.rental_advance and self.customer_branch.rental_advance is True:
+                raise ValidationError(_('Rental Advance is mandatory for this customer'))
+            if not self.security_cheque and self.customer_branch.security_cheque is True:
+                raise ValidationError(_('Security Cheque is mandatory for this customer'))
+            if not self.partner_id.vat:
+                raise ValidationError(_("This customer does not have a PAN. Please check customer details"))
+            if not self.partner_id.bill_submission_process:
+                raise ValidationError(
+                    _("This customer does not have a Bill submission process defined. Please check customer details"))
+            if self.partner_id.bill_submission_process.code == 'email' and not self.bill_submission_email:
+                raise ValidationError(_("Bill submission email is required."))
+            if self.partner_id.bill_submission_process.code in ['site',
+                                                                'site_office'] and not self.site_bill_submission_godown:
+                raise ValidationError(_("Site Bill submission godown is required."))
+            if self.partner_id.bill_submission_process.code in ['office',
+                                                                'site_office'] and not self.office_bill_submission_godown:
+                raise ValidationError(_("Office Bill submission godown is required."))
+            if self.partner_id.bill_submission_process.code in ['site', 'site_office'] and not self.bill_site_contact:
+                raise ValidationError(_("Bill Site Contact is required."))
+            if self.partner_id.bill_submission_process.code in ['office', 'site_office'] and not self.bill_office_contact:
+                raise ValidationError(_("Customer Bill Submission Office Contac"))
+            if self.partner_id.bill_submission_process.code in ['office',
+                                                                'site_office'] and not self.bill_submission_office_branch:
+                raise ValidationError(_("Bill Submission Office Branch is required."))
+            if not self.partner_id.team_id:
+                raise ValidationError(_("Sales team for master customer is not available."))
+            if not self.partner_id.credit_rating:
+                raise ValidationError(_("Credit Rating for master customer is not available."))
 
-        if self.security_cheque and not (self.cheque_number or self.cheque_amount or self.bank):
-            raise ValidationError(_("Please enter security cheque details"))
+            if self.security_cheque and not (self.cheque_number or self.cheque_amount or self.bank):
+                raise ValidationError(_("Please enter security cheque details"))
 
     def _generate_job_number(self, created_by, customer_id, quotation_id):
         today = datetime.date.today()
-        job_order_number = str(today.year) + "/" + today.strftime("%b") + "/" + self.jobsite_id.name + "/" + str(
-            created_by) + "/" + str(customer_id) + "/" + self.po_number + "/" + str(quotation_id)
+        job_order_number = str(today.year) + "/" + today.strftime("%b") + "/" + self.jobsite_id.name + "/" + str(created_by) + "/" + str(customer_id)
+
+        if self.po_number:
+            job_order_number = job_order_number + "/" + self.po_number
+
+        job_order_number = job_order_number + "/" + str(quotation_id)
         return job_order_number
 
     def check_existing_customer_beta(self, gstn):
@@ -703,3 +712,7 @@ class SaleOrderInherit(models.Model):
         finally:
             if connection and connection.is_connected() and cursor:
                 cursor.close()
+
+
+
+
