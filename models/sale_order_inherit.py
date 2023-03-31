@@ -7,6 +7,7 @@ import mysql.connector
 from mysql.connector import Error
 import json
 import requests
+import traceback
 
 import datetime, mimetypes
 
@@ -135,6 +136,47 @@ def _get_beta_compatible_freight_type(freight_type):
     }
 
     return frieght_map.get(freight_type)
+
+class SaleAdvancePaymentInvInheit(models.TransientModel):
+    _inherit = "sale.advance.payment.inv"
+
+    def create_invoices(self):
+        try:
+            sale_orders = self.env['sale.order'].browse(self._context.get('active_ids', []))
+            for order in sale_orders:
+                _logger.info("evt=CREATE_INVOICE msg=Job Order" + order.job_order)
+
+                payment_reciept = self.env['ir.attachment'].sudo().search(
+                    [('res_model', '=', 'sale.order'), ('res_field', '=', 'payment_reciept'), ('res_id', '=', order.id),
+                     ('type', '=', 'url')])
+
+                if not payment_reciept:
+                    raise UserError("Payment Reciept is required for creating invoice.")
+
+                payload = json.dumps({
+                    "invoice": [
+                        {
+                            "job_order": order.job_order,
+                            "invoice_type": order.order_type,
+                            "payment_reciept_url": payment_reciept.url if payment_reciept.url else ""
+                        }
+                    ]
+                })
+                invoice_save_endpoint = "https://65.1.40.169/createSaleInvoice"
+                response = requests.request("POST", invoice_save_endpoint, headers={'Content-Type': 'application/json'},
+                                            data=payload, verify=False)
+                response.raise_for_status()
+
+            return super(SaleAdvancePaymentInvInheit, self).create_invoices()
+        except requests.HTTPError as e:
+            error_msg = _(
+                "Remote server returned status " + e.response.status_code + "with message " + e.response.reason)
+            raise self.env['res.config.settings'].get_config_warning(error_msg)
+        except Exception as e:
+            error_msg = _(str(e))
+            raise self.env['res.config.settings'].get_config_warning(error_msg)
+        finally:
+            _logger.error(traceback.format_exc())
 
 class SaleOrderInherit(models.Model):
     _inherit = 'sale.order'
@@ -287,7 +329,7 @@ class SaleOrderInherit(models.Model):
 
                 beta_customer_save_endpoint = self._get_customer_creation_endpoint()
 
-                response = requests.request("POST", beta_customer_save_endpoint, headers={'Content-Type': 'application/json'}, data=payload, verify=False)
+                response = requests.request("POST", beta_customer_save_endpoint, headers={'Content-Type': 'application/json'}, data=gitpayload, verify=False)
                 response.raise_for_status()
 
                 if not response.ok:
