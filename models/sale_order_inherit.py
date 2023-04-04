@@ -329,7 +329,7 @@ class SaleOrderInherit(models.Model):
 
                 beta_customer_save_endpoint = self._get_customer_creation_endpoint()
 
-                response = requests.request("POST", beta_customer_save_endpoint, headers={'Content-Type': 'application/json'}, data=gitpayload, verify=False)
+                response = requests.request("POST", beta_customer_save_endpoint, headers={'Content-Type': 'application/json'}, data=payload, verify=False)
                 response.raise_for_status()
 
                 if not response.ok:
