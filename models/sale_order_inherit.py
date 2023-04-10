@@ -276,7 +276,7 @@ class SaleOrderInherit(models.Model):
                     customer_master_id = get_beta_customer_master_id(cursor.fetchall())
                     branch_data = self.env['customer.to.beta']._get_branch_data_for_saving_in_beta(self.customer_branch, user_email, customer_master_id)
 
-                    beta_branch_save_endpoint = self.env['customer.to.beta']._get_branch_creation_endpoint()
+                    beta_branch_save_endpoint = self._get_branch_creation_endpoint()
 
                     response = requests.request("POST", beta_branch_save_endpoint, headers={'Content-Type': 'application/json'}, data=json.dumps(branch_data), verify=False)
                     response.raise_for_status()
