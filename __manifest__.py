@@ -13,7 +13,8 @@
     'depends': ['base', 'sale_management', 'sale', 'jobsites', 'youngman_customers'],
 
     'data': [
-        'views/views.xml'
+        'views/views.xml',
+        'security/ir.model.access.csv',
     ],
 
     'application': True,

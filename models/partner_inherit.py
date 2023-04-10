@@ -2,6 +2,7 @@
 
 from odoo import api, fields, models, _
 
+
 import logging
 import mysql.connector
 from mysql.connector import Error
@@ -13,6 +14,11 @@ from odoo.exceptions import UserError
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
+
+    def action_send_to_beta(self):
+        if ((self.is_company==True) and (self.is_customer_branch==False) and (self.in_beta==False)):
+            _logger.info("button clicked working porperly")
+            self.env['customer.to.beta']._create_customer_in_beta_if_not_exists(self)
 
     @api.onchange('bill_submission_process')
     def _onchange_bill_submission_process(self):
