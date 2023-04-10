@@ -56,8 +56,12 @@ def get_beta_user_id_from_email_query():
 
 def get_customer_master_id_from_pan():
     return "select id from customer_masters where UPPER(pan) = %s"
+
 def get_beta_customer_id_from_gstn():
     return "select id, status from customers where UPPER(gstn) = %s"
+
+def get_beta_customer_id_for_non_gst_customer():
+    return "select customers.id as id, customers.status as status from customers, customer_masters where customer_masters.id = customers.customer_master_id and customer_masters.pan = %s limit 1"
 
 def get_beta_branch_form_gstn_query():
     return "select id from customers where UPPER(gstn) = %s"
@@ -77,6 +81,9 @@ def get_order_insert_query():
 
 def _get_cheque_details_insert_query():
     return "INSERT INTO customer_security_cheque (customer_id, order_id, cheque_no, cheque_amount, cheque_date,bank, lapsed, verified, cheque_ownership, security_cheque) VALUES(%(customer_id)s, %(order_id)s, %(cheque_no)s, %(cheque_amount)s, %(cheque_date)s, %(bank)s, %(lapsed)s, %(verified)s, %(cheque_ownership)s, %(security_cheque)s)"
+
+def _get_contact_notification_insert_query():
+    return "INSERT INTO order_contact_notification (order_id, contact_crm_id) VALUES(%(order_id)s, %(contact_crm_id)s)"
 
 def get_beta_godown_id_by_name_query(godown_name):
     return "SELECT id from locations where type='godown' and location_name = '{}'".format(godown_name)
@@ -153,7 +160,11 @@ class SaleOrderInherit(models.Model):
                 created_by = 568
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get customer id from beta")
-            cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
+
+            if self.partner_id.is_non_gst_customer:
+                cursor.execute(get_beta_customer_id_for_non_gst_customer(), [self.partner_id.vat])
+            else:
+                cursor.execute(get_beta_customer_id_from_gstn(), [self.customer_branch.gstn])
             customer_id, status = get_beta_customer_id_and_status(cursor.fetchall())
 
             if status != 'UNBLOCK':
@@ -200,6 +211,12 @@ class SaleOrderInherit(models.Model):
             order_id = cursor.lastrowid
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
+            try:
+                cursor.executemany(_get_contact_notification_insert_query(), self._get_contacts_to_notify(order_id))
+                _logger.info("evt=SEND_ORDER_TO_BETA msg=Saved contacts to notify")
+            except Error as err:
+                _logger.error("evt=SEND_ORDER_TO_BETA msg="+str(err))
+
             if self.security_cheque:
                 cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, cheque_ownership))
 
@@ -237,8 +254,17 @@ class SaleOrderInherit(models.Model):
             connection.rollback()
             raise UserError(_(e))
 
+    def _get_contacts_to_notify(self, order_id):
+        return [
+            {'contact_crm_id': self.purchaser_name.id, 'order_id': order_id},
+            {'contact_crm_id': self.site_contact_name.id, 'order_id': order_id}
+        ]
+
     def _create_branch_in_beta_if_not_exists(self):
         try:
+            #if self.partner_id.is_non_gst_customer:
+            #    return
+
             connection = self._get_connection()
             cursor = connection.cursor()
             if not self.customer_branch.in_beta:
