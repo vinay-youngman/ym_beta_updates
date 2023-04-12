@@ -48,7 +48,19 @@
             </xpath>
         </field>
     </record>
-
+    <!--    send to beta functionality button for sale order-->
+      <record id = "res_partner_form_inherit" model="ir.ui.view">
+          <field name="name">res_partner_form_inherit</field>
+          <field name="model">res.partner</field>
+          <field name="inherit_id" ref="base.view_partner_form"/>
+          <field name="arch" type="xml">
+              <xpath expr="/form/*" position="before">
+                  <header>
+                      <button name="action_send_to_beta" string="Save Customer To Beta"  type="object" class="btn_primary"/>
+                  </header>
+              </xpath>
+          </field>
+      </record>
       <record model="ir.actions.act_window" id="action_beta_hooks_config_settings">
           <field name="name">Beta Hooks</field>
           <field name="type">ir.actions.act_window</field>
