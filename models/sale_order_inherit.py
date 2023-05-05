@@ -287,14 +287,13 @@ class SaleOrderInherit(models.Model):
                                    _get_order_item_feed_details(job_order_number, quotation_items))
 
             super(SaleOrderInherit, self).action_confirm()
-            cursor.close()
-            connection.commit()
 
-
-            planning = self.env['res.partner'].search([('email','=','planning@youngman.co.in')])
+            planning = self.env['res.partner'].search([('email','=','planning@youngman.co.in')],limit=1)
             message = "A new order has been added for {} on {}. Please plan the delivery. Youngman India Pvt. Ltd.".format(self.job_order.split('/')[-1], self._get_current_date_time())
             self.env['ym.sms'].send_sms(planning, message)
 
+            cursor.close()
+            connection.commit()
 
         except Error as err:
             _logger.error("evt=SEND_ORDER_TO_BETA msg=", exc_info=1)
