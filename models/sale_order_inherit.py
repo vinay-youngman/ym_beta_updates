@@ -98,7 +98,6 @@ def get_update_quotation_with_order_query():
 def get_order_po_insert_query():
     return "INSERT INTO order_po(order_id, po_no, po_amt, balance) VALUES (%s, %s, %s, %s)"
 
-
 def get_order_po_details_insert_query():
     return "INSERT INTO order_po_details(order_id, po_no, po_date , item_code , quantity) VALUES (%(order_id)s,%(po_no)s,%(po_date)s,%(item_code)s,%(quantity)s)"
 
@@ -182,6 +181,34 @@ class SaleAdvancePaymentInvInheit(models.TransientModel):
 class SaleOrderInherit(models.Model):
     _inherit = 'sale.order'
 
+    beta_order_id = fields.Integer(string = "Beta Order Id")
+
+    def action_extend(self):
+        # date=self.pickup_date
+        # rental=self.rental_order
+        try:
+            connection = self._get_connection()
+            connection.autocommit = False
+            cursor = connection.cursor()
+
+            _logger.info("evt=EXTEND_ORDER msg=Saving PO data")
+
+            cursor.execute("INSERT INTO extensions (order_id, old_rental_order) SELECT id as order_id, rental_order as old_rental_order FROM orders WHERE id = %s",(self.beta_order_id,))
+            cursor.execute("UPDATE quotations SET pickup_date=%s WHERE order_id=%s",(self.pickup_date, self.beta_order_id))
+            cursor.execute("UPDATE orders SET rental_order = %s WHERE id = %s",[self._get_document_if_exists('rental_order'), self.beta_order_id])
+            cursor.execute("SELECT * FROM challans WHERE challan_type = 'Pickup' AND challans.recieving IS NULL AND deleted_at IS NULL AND order_id = %s",(self.beta_order_id,))
+
+            cursor.fetchall()
+            connection.commit()
+
+        except Error as err:
+            _logger.error("evt=SEND_ORDER_TO_BETA msg=", exc_info=1)
+            connection.rollback()
+            raise UserError(_(err))
+        except Exception as e:
+            connection.rollback()
+            raise UserError(_(e))
+
     def action_confirm(self):
         self._validate_order_before_confirming()
         self.env['customer.to.beta']._create_customer_in_beta_if_not_exists(self.partner_id)
@@ -252,6 +279,8 @@ class SaleOrderInherit(models.Model):
                                               place_of_supply_code, beta_bill_godown_id, beta_godown_id, "0")
             cursor.execute(get_order_insert_query(), order_data)
             order_id = cursor.lastrowid
+
+            self.beta_order_id = order_id
             # order
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
