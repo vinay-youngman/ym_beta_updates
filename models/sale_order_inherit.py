@@ -183,6 +183,65 @@ class SaleOrderInherit(models.Model):
 
     beta_order_id = fields.Integer(string = "Beta Order Id")
 
+    def action_amend(self, vals):
+        try:
+            self._validate_if_amendment_allowed(vals)
+
+            connection = self._get_connection()
+            connection.autocommit = False
+            cursor = connection.cursor()
+
+            amendment_details = self._get_amendment_details(vals)
+            cursor.execute("INSERT INTO amend_order_log (order_id, freight, amendment_doc, po_no, is_amended) VALUES (%(order_id)s, %(freight)s, %(amendment_doc)s, %(po_no)s, %(is_amended)s)", amendment_details)
+            cursor.execute("SELECT LAST_INSERT_ID()")
+            last_amend_order_log_id = cursor.fetchone()[0]
+
+            for order_line in vals['order_line']:
+                data_dict = order_line[2]
+                action_to_perform = order_line[0]
+                order_line = self.env['sale.order.line'].search([('id', '=', order_line[0])])
+
+                if action_to_perform in [0,1]:
+                    data = self._get_amend_order_log_line(data_dict, last_amend_order_log_id, order_line)
+                    cursor.execute(
+                        "INSERT INTO amend_order_log_details (amend_order_log_id, order_id, item_code, unit_price, quantity) "
+                        "VALUES (%(amend_order_log_id)s, %(order_id)s, %(item_code)s, %(unit_price)s, %(quantity)s)",data)
+
+        except Error as err:
+            _logger.error("evt=ORDER_CANNOT_BE_AMENDED msg=", exc_info=1)
+            connection.rollback()
+            raise UserError(_(err))
+        except Exception as e:
+            connection.rollback()
+            raise UserError(_(e))
+
+    def _validate_if_amendment_allowed(self, vals):
+        not_allowed_actions = [2, 5, 6, 3]
+        for order_line in vals['order_line']:
+            if order_line[0] in not_allowed_actions:
+                raise UserError(_('You Cannot Delete an existing item'))
+
+    def _get_amendment_details(self, vals):
+        amendment_details = {
+            'order_id': self.beta_order_id,
+            'freight': vals['freight_amount'] if 'freight' in vals else self.freight_amount,
+            'amendment_doc': 'filename.pdf',#self._get_document_if_exists('rental_order'),
+            'po_no': vals['po_number'] if 'po_number' in vals else self.po_number,
+            'is_amended': 1
+        }
+        return amendment_details
+
+    def _get_amend_order_log_line(self, data_dict, last_amend_order_log_id, order_line):
+        data = {
+            'amend_order_log_id': last_amend_order_log_id,
+            'order_id': self.beta_order_id,
+            'item_code': order_line.product_id.code,
+            'unit_price': data_dict['price_unit'] if 'price_unit' in data_dict else order_line.price_unit,
+            'quantity': data_dict[
+                'product_uom_qty'] if 'product_uom_qty' in data_dict else order_line.product_uom_qty
+        }
+        return data
+
     def action_extend(self):
         try:
             connection = self._get_connection()
