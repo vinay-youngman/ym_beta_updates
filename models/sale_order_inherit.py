@@ -199,7 +199,11 @@ class SaleOrderInherit(models.Model):
             for order_line in vals['order_line']:
                 data_dict = order_line[2]
                 action_to_perform = order_line[0]
-                order_line = self.env['sale.order.line'].search([('id', '=', order_line[0])])
+
+                if isinstance(order_line[1], str):
+                    order_line = self.env['sale.order.line'].search([('name', '=', order_line[1])])
+                else:
+                    order_line = self.env['sale.order.line'].search([('id', '=', order_line[1])])
 
                 if action_to_perform in [0,1]:
                     data = self._get_amend_order_log_line(data_dict, last_amend_order_log_id, order_line)
@@ -207,6 +211,7 @@ class SaleOrderInherit(models.Model):
                         "INSERT INTO amend_order_log_details (amend_order_log_id, order_id, item_code, unit_price, quantity) "
                         "VALUES (%(amend_order_log_id)s, %(order_id)s, %(item_code)s, %(unit_price)s, %(quantity)s)",data)
 
+            connection.commit()
         except Error as err:
             _logger.error("evt=ORDER_CANNOT_BE_AMENDED msg=", exc_info=1)
             connection.rollback()
@@ -237,8 +242,7 @@ class SaleOrderInherit(models.Model):
             'order_id': self.beta_order_id,
             'item_code': order_line.product_id.code,
             'unit_price': data_dict['price_unit'] if 'price_unit' in data_dict else order_line.price_unit,
-            'quantity': data_dict[
-                'product_uom_qty'] if 'product_uom_qty' in data_dict else order_line.product_uom_qty
+            'quantity': data_dict['product_uom_qty'] if 'product_uom_qty' in data_dict else order_line.product_uom_qty
         }
         return data
 
