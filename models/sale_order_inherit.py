@@ -29,7 +29,7 @@ def get_beta_customer_master_id(customer_master_result):
     if not customer_master_result or len(customer_master_result) ==0:
         raise UserError("Master customer for this branch does not exist in beta")
     else:
-        return customer_master_result[0][0]
+        return customer_master_result[0][0], customer_master_result[0][1]
 
 def get_beta_customer_id_and_status(customer_id_result):
     if not customer_id_result or len(customer_id_result) == 0:
@@ -57,10 +57,11 @@ def get_beta_user_id_from_email_query():
     return "select id from users where LOWER(email) = %s"
 
 def get_customer_master_id_from_pan():
-    return "select id from customer_masters where UPPER(pan) = %s"
+    return "select id, status from customer_masters where UPPER(pan) = %s"
 
 def get_beta_customer_id_from_gstn():
     return "select id, status from customers where UPPER(gstn) = %s"
+
 
 def get_beta_customer_id_for_non_gst_customer():
     return "select customers.id as id, customers.status as status from customers, customer_masters where customer_masters.id = customers.customer_master_id and customer_masters.pan = %s limit 1"
@@ -237,6 +238,12 @@ class SaleOrderInherit(models.Model):
             if status != 'UNBLOCK':
                 raise UserError("This customer is in {} status".format(status))
 
+            cursor.execute(get_customer_master_id_from_pan(), [self.partner_id.vat])
+            _, customer_master_status = get_beta_customer_master_id(cursor.fetchall())
+
+            if customer_master_status != 'UNBLOCK':
+                raise UserError("This customer master is in {} status".format(customer_master_status))
+
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get billing godown id from beta")
             cursor.execute(get_beta_godown_id_by_name_query(self.bill_godown.name))
             beta_bill_godown_id = get_beta_godown_id(cursor.fetchone())
@@ -358,7 +365,7 @@ class SaleOrderInherit(models.Model):
                 else:
                     user_email = self.partner_id.user_id.login
                     cursor.execute(get_customer_master_id_from_pan(), [self.partner_id.vat])
-                    customer_master_id = get_beta_customer_master_id(cursor.fetchall())
+                    customer_master_id, _ = get_beta_customer_master_id(cursor.fetchall())
                     branch_data = self.env['customer.to.beta']._get_branch_data_for_saving_in_beta(self.customer_branch, user_email, customer_master_id)
 
                     beta_branch_save_endpoint = self._get_branch_creation_endpoint()
