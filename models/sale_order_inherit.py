@@ -185,23 +185,25 @@ class SaleOrderInherit(models.Model):
 
     def action_amend(self, vals):
         try:
-            self._validate_if_amendment_allowed(vals)
+
 
             connection = self._get_connection()
             connection.autocommit = False
             cursor = connection.cursor()
+
+            self._validate_if_amendment_allowed(vals)
 
             amendment_details = self._get_amendment_details(vals)
             cursor.execute("INSERT INTO amend_order_log (order_id, freight, amendment_doc, po_no, is_amended) VALUES (%(order_id)s, %(freight)s, %(amendment_doc)s, %(po_no)s, %(is_amended)s)", amendment_details)
             cursor.execute("SELECT LAST_INSERT_ID()")
             last_amend_order_log_id = cursor.fetchone()[0]
 
-            for order_line in vals['order_line']:
+            for order_line in vals.get('order_line', []):
                 data_dict = order_line[2]
                 action_to_perform = order_line[0]
 
                 if isinstance(order_line[1], str):
-                    order_line = self.env['sale.order.line'].search([('name', '=', order_line[1])])
+                    order_line = self.env['sale.order.line'].search([('name', '=', order_line[2]['name'])])
                 else:
                     order_line = self.env['sale.order.line'].search([('id', '=', order_line[1])])
 
@@ -222,7 +224,7 @@ class SaleOrderInherit(models.Model):
 
     def _validate_if_amendment_allowed(self, vals):
         not_allowed_actions = [2, 5, 6, 3]
-        for order_line in vals['order_line']:
+        for order_line in vals.get('order_line', []):
             if order_line[0] in not_allowed_actions:
                 raise UserError(_('You Cannot Delete an existing item'))
 
@@ -241,8 +243,8 @@ class SaleOrderInherit(models.Model):
             'amend_order_log_id': last_amend_order_log_id,
             'order_id': self.beta_order_id,
             'item_code': order_line.product_id.code,
-            'unit_price': data_dict['price_unit'] if 'price_unit' in data_dict else order_line.price_unit,
-            'quantity': data_dict['product_uom_qty'] if 'product_uom_qty' in data_dict else order_line.product_uom_qty
+            'unit_price': data_dict.get('price_unit', order_line.price_unit),
+            'quantity': data_dict.get('product_uom_qty', order_line.product_uom_qty)
         }
         return data
 
