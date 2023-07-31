@@ -232,7 +232,7 @@ class SaleOrderInherit(models.Model):
         amendment_details = {
             'order_id': self.beta_order_id,
             'freight': vals['freight_amount'] if 'freight' in vals else self.freight_amount,
-            'amendment_doc': 'filename.pdf',#self._get_document_if_exists('rental_order'),
+            'amendment_doc': self._get_document_if_exists('rental_order'),
             'po_no': vals['po_number'] if 'po_number' in vals else self.po_number,
             'is_amended': 1
         }
