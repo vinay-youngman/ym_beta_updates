@@ -239,14 +239,26 @@ class SaleOrderInherit(models.Model):
         return amendment_details
 
     def _get_amend_order_log_line(self, data_dict, last_amend_order_log_id, order_line):
+        if 'price_unit' in data_dict:
+            unit_price = data_dict.get('price_unit')
+        else:
+            unit_price = order_line.price_unit
+
+        if 'product_uom_qty' in data_dict:
+            quantity= data_dict.get('product_uom_qty')
+        else:
+            quantity=order_line.product_uom_qty
+
         data = {
             'amend_order_log_id': last_amend_order_log_id,
             'order_id': self.beta_order_id,
-            'item_code': order_line.product_id.code,
-            'unit_price': data_dict.get('price_unit', order_line.price_unit),
-            'quantity': data_dict.get('product_uom_qty', order_line.product_uom_qty)
+            'item_code': data_dict.get('product_id', order_line.product_id.code),
+            'unit_price': unit_price,
+            'quantity': quantity
         }
         return data
+
+    # data_dict.get('price_unit', order_line.price_unit)
 
     def action_extend(self):
         try:
@@ -412,7 +424,7 @@ class SaleOrderInherit(models.Model):
     def _create_branch_in_beta_if_not_exists(self):
         cursor = None
         try:
-            #if self.partner_id.is_non_gst_customer:
+            # if self.partner_id.is_non_gst_customer:
             #    return
 
             connection = self._get_connection()
