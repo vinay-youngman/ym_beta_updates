@@ -331,11 +331,15 @@ class SaleOrderInherit(models.Model):
             cursor.close()
             connection.commit()
 
+        except UserError as ue:
+            connection.rollback()
+            raise ue
         except Error as err:
             _logger.error("evt=SEND_ORDER_TO_BETA msg=", exc_info=1)
             connection.rollback()
             raise UserError(_(err))
         except Exception as e:
+            _logger.error("evt=SEND_ORDER_TO_BETA msg=", exc_info=1)
             connection.rollback()
             raise UserError(_(e))
 
