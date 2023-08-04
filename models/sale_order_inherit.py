@@ -50,7 +50,11 @@ def get_quotation_insert_query():
 
 
 def get_quotation_items_insert_query():
-    return "insert into quotation_items (quotation_id, item_code, unit_price, quantity, created_at, updated_at) VALUES (%(quotation_id)s, %(item_code)s, %(unit_price)s, %(quantity)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+    return "INSERT INTO quotation_items (quotation_id, item_code, unit_price, quantity, created_at, updated_at) " \
+           "VALUES (%(quotation_id)s, %(item_code)s, %(unit_price)s, %(quantity)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) " \
+           "ON DUPLICATE KEY UPDATE " \
+           "item_code = VALUES(item_code), unit_price = VALUES(unit_price), " \
+           "quantity = VALUES(quantity), updated_at = CURRENT_TIMESTAMP"
 
 
 def get_beta_user_id_from_email_query():
@@ -103,7 +107,10 @@ def get_order_po_details_insert_query():
 
 
 def get_order_item_feed_insert_query():
-    return "INSERT INTO order_item_feed(job_order, item_code, quantity) VALUES (%(job_order)s, %(item_code)s, %(quantity)s)"
+    return "INSERT INTO order_item_feed(job_order, item_code, quantity) VALUES (%(job_order)s, %(item_code)s, %(quantity)s)" \
+           "ON DUPLICATE KEY UPDATE " \
+           "quantity = VALUES(quantity)"
+
 
 
 def get_billing_process_insert_query():
@@ -198,20 +205,56 @@ class SaleOrderInherit(models.Model):
             cursor.execute("SELECT LAST_INSERT_ID()")
             last_amend_order_log_id = cursor.fetchone()[0]
 
+            quotation_items = []
             for order_line in vals.get('order_line', []):
                 data_dict = order_line[2]
                 action_to_perform = order_line[0]
 
-                if isinstance(order_line[1], str):
-                    order_line = self.env['sale.order.line'].search([('name', '=', order_line[2]['name'])])
-                else:
-                    order_line = self.env['sale.order.line'].search([('id', '=', order_line[1])])
-
                 if action_to_perform in [0,1]:
-                    data = self._get_amend_order_log_line(data_dict, last_amend_order_log_id, order_line)
+
+                    if action_to_perform == 0:
+                        # Create new
+                        item_code = self.env['product.product'].search([('id', '=', data_dict.get('product_id'))]).default_code
+                        unit_price = data_dict.get('price_unit')
+                        quantity = data_dict.get('product_uom_qty')
+                    else:
+                        # update existing
+                        existing_order_line = self.env['sale.order.line'].search([('id', '=', order_line[1])])
+                        item_code = existing_order_line.product_id.code
+                        unit_price = data_dict.get('price_unit', existing_order_line.price_unit)
+                        quantity = data_dict.get('product_uom_qty', existing_order_line.product_uom_qty)
+
+
+
                     cursor.execute(
                         "INSERT INTO amend_order_log_details (amend_order_log_id, order_id, item_code, unit_price, quantity) "
-                        "VALUES (%(amend_order_log_id)s, %(order_id)s, %(item_code)s, %(unit_price)s, %(quantity)s)",data)
+                        "VALUES (%(amend_order_log_id)s, %(order_id)s, %(item_code)s, %(unit_price)s, %(quantity)s)", {
+                                'amend_order_log_id': last_amend_order_log_id,
+                                'order_id': self.beta_order_id,
+                                'item_code': item_code,
+                                'unit_price': unit_price,
+                                'quantity': quantity
+                            })
+
+                    _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to save quoataion items")
+
+                    quotation_items.append({
+                        'quotation_id': self.job_order.split("/")[-1],
+                        'item_code': item_code,
+                        'unit_price': unit_price,
+                        'quantity': quantity
+                    })
+
+
+
+            cursor.executemany(get_quotation_items_insert_query(), quotation_items)
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Quotation items saved")
+
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=insert into order item feed")
+            item_feed_details = _get_order_item_feed_details(self.job_order, quotation_items)
+            for item_detail in item_feed_details:
+                cursor.execute(get_order_item_feed_insert_query(), item_detail)
+
 
             connection.commit()
         except Error as err:
@@ -232,31 +275,12 @@ class SaleOrderInherit(models.Model):
         amendment_details = {
             'order_id': self.beta_order_id,
             'freight': vals['freight_amount'] if 'freight' in vals else self.freight_amount,
-            'amendment_doc': self._get_document_if_exists('rental_order'),
+            'amendment_doc': 'abc.txt',
+            # self._get_document_if_exists('rental_order')
             'po_no': vals['po_number'] if 'po_number' in vals else self.po_number,
             'is_amended': 1
         }
         return amendment_details
-
-    def _get_amend_order_log_line(self, data_dict, last_amend_order_log_id, order_line):
-        if 'price_unit' in data_dict:
-            unit_price = data_dict.get('price_unit')
-        else:
-            unit_price = order_line.price_unit
-
-        if 'product_uom_qty' in data_dict:
-            quantity= data_dict.get('product_uom_qty')
-        else:
-            quantity=order_line.product_uom_qty
-
-        data = {
-            'amend_order_log_id': last_amend_order_log_id,
-            'order_id': self.beta_order_id,
-            'item_code': data_dict.get('product_id', order_line.product_id.code),
-            'unit_price': unit_price,
-            'quantity': quantity
-        }
-        return data
 
     # data_dict.get('price_unit', order_line.price_unit)
 
@@ -518,7 +542,7 @@ class SaleOrderInherit(models.Model):
             quotation_total = quotation_total + (order_line.price_unit * order_line.product_uom_qty)
         return quotation_total
 
-    def _get_quotation_items_and_total(self, quotation_id):
+    def _get_quotation_items_and_total(self, quotation_id, amend_order_line = None):
         quotation_items = []
         if len(self.order_line) == 0:
             raise UserError("Please select quotation items.")
