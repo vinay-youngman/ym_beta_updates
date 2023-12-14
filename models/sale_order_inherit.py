@@ -124,6 +124,36 @@ def _concatenate_address_string(address_strings):
     return ', '.join(map(str, arr))
 
 
+def _get_order_item_feed_details_amend_order(job_order, quotation_items, existing_quantity_at_beta, existing_order_item_feed):
+    item_feed_details = []
+
+    for item in quotation_items:
+        found_existing_item = False
+        for existing_item_code in existing_quantity_at_beta:
+            for existing_item_feed in existing_order_item_feed:
+                if (item['item_code'] == existing_item_code[0]) and (existing_item_feed[0] == item['item_code']):
+                    quantity = item['quantity'] - existing_item_code[1] + existing_item_feed[1]
+
+                    if quantity < 0:
+                        raise Exception(_('Cannot Amend Less Than Material To Be Sent'))
+
+                    item_feed_details.append({
+                        'job_order': job_order,
+                        'item_code': item['item_code'],
+                        'quantity': quantity,
+                    })
+                    found_existing_item = True
+                    break
+
+        if not found_existing_item:
+            item_feed_details.append({
+                'job_order': job_order,
+                'item_code': item['item_code'],
+                'quantity': item['quantity'],
+            })
+
+    return item_feed_details
+
 def _get_order_item_feed_details(job_order, quotation_items):
     item_feed_details = []
     for item in quotation_items:
@@ -200,11 +230,15 @@ class SaleOrderInherit(models.Model):
             cursor = connection.cursor()
 
             self._validate_if_amendment_allowed(vals)
-
+            quotation_id = (self.job_order.split('/')[-1])
             amendment_details = self._get_amendment_details(vals)
             cursor.execute("INSERT INTO amend_order_log (order_id, freight, amendment_doc, po_no, is_amended) VALUES (%(order_id)s, %(freight)s, %(amendment_doc)s, %(po_no)s, %(is_amended)s)", amendment_details)
             cursor.execute("SELECT LAST_INSERT_ID()")
             last_amend_order_log_id = cursor.fetchone()[0]
+            existing_quotation_items_at_beta = cursor.execute("SELECT item_code , quantity FROM quotation_items WHERE quotation_id = %s",(quotation_id,))
+            existing_quotation_items_at_beta = cursor.fetchall()
+            existing_order_item_feed = cursor.execute("SELECT item_code , quantity FROM order_item_feed WHERE job_order = %s",(self.job_order,))
+            existing_order_item_feed = cursor.fetchall()
 
             quotation_items = []
             for order_line in vals.get('order_line', []):
@@ -252,10 +286,14 @@ class SaleOrderInherit(models.Model):
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Quotation items saved")
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=insert into order item feed")
-            item_feed_details = _get_order_item_feed_details(self.job_order, quotation_items)
+            item_feed_details = _get_order_item_feed_details_amend_order(self.job_order, quotation_items, existing_quotation_items_at_beta, existing_order_item_feed)
             for item_detail in item_feed_details:
                 cursor.execute(get_order_item_feed_insert_query(), item_detail)
 
+            get_order_realese_status = cursor.execute("SELECT released_at FROM orders WHERE quotation_id = %s",(quotation_id,))
+            get_order_realese_status = cursor.fetchall()
+            if get_order_realese_status[0][0] is not None:
+                cursor.execute("UPDATE orders SET released_at = NULL WHERE quotation_id = %s", (quotation_id,))
 
             connection.commit()
         except Error as err:
@@ -308,6 +346,9 @@ class SaleOrderInherit(models.Model):
             raise UserError(_(e))
 
     def action_confirm(self):
+        if self.is_sale_order_approval_required:
+            super(SaleOrderInherit, self).action_confirm()
+            return
         self._validate_order_before_confirming()
         self.env['customer.to.beta']._create_customer_in_beta_if_not_exists(self.partner_id)
         self._create_branch_in_beta_if_not_exists() #For branches that were added post initial customer creation
@@ -316,7 +357,7 @@ class SaleOrderInherit(models.Model):
             connection = self._get_connection()
             connection.autocommit = False
             cursor = connection.cursor()
-            email = self.env.user.login.lower()
+            email = self.partner_id.user_id.email.lower()
 
             if self.partner_id.team_id.name == 'INSIDE SALES':
                 created_by = 568
