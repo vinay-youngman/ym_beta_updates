@@ -319,7 +319,7 @@ class SaleOrderInherit(models.Model):
 
         if 'freight_amount' in vals and vals['freight_amount'] < self.freight_amount and self.state == 'sale':
             raise UserError(
-                _('The freight amount cannot be less than it was previously after the order has been placed.'))
+                _('The freight amount cannot be less than it was after the order has been placed.'))
         else:
             freight_for_amend = max(vals.get('freight_amount', 0) - existing_freight_at_beta, 0)
 
