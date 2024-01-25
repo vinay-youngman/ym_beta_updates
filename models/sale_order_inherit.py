@@ -228,10 +228,7 @@ class SaleOrderInherit(models.Model):
 
             self._validate_if_amendment_allowed(vals)
             quotation_id = (self.job_order.split('/')[-1])
-            existing_freight_at_beta = cursor.execute(
-                "SELECT quotations.freight + SUM(amend_order_log.freight) AS total_amended_freight FROM quotations "
-                "INNER JOIN amend_order_log ON quotations.order_id = amend_order_log.order_id "
-                "WHERE quotations.order_id = %s GROUP BY quotations.freight;", (self.beta_order_id,))
+            existing_freight_at_beta = cursor.execute("SELECT quotations.freight + COALESCE(SUM(amend_order_log.freight), 0) AS total_amended_freight FROM quotations LEFT JOIN amend_order_log ON quotations.order_id = amend_order_log.order_id WHERE quotations.order_id = %s GROUP BY quotations.freight;", (self.beta_order_id,))
             existing_freight_at_beta = cursor.fetchall()
             existing_freight_at_beta = float(existing_freight_at_beta[0][0]) if existing_freight_at_beta else 0
             if existing_freight_at_beta == 0 and self.customer_branch.credit_rating =='C':
