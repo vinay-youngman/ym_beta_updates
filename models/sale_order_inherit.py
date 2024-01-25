@@ -234,6 +234,8 @@ class SaleOrderInherit(models.Model):
                 "WHERE quotations.order_id = %s GROUP BY quotations.freight;", (self.beta_order_id,))
             existing_freight_at_beta = cursor.fetchall()
             existing_freight_at_beta = float(existing_freight_at_beta[0][0]) if existing_freight_at_beta else 0
+            if existing_freight_at_beta == 0 and self.customer_branch.credit_rating =='C':
+                raise UserError(_('Please Contact Your Manager Ask Them To Approve Your Order At Beta Before Amending This Order Via Odoo'))
             amendment_details = self._get_amendment_details(vals,existing_freight_at_beta)
             cursor.execute("INSERT INTO amend_order_log (order_id, freight, amendment_doc, po_no, is_amended) VALUES (%(order_id)s, %(freight)s, %(amendment_doc)s, %(po_no)s, %(is_amended)s)", amendment_details)
             cursor.execute("SELECT LAST_INSERT_ID()")
