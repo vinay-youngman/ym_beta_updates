@@ -490,7 +490,8 @@ class SaleOrderInherit(models.Model):
     def _get_contacts_to_notify(self, order_id):
         return [
             {'contact_crm_id': self.purchaser_name.id, 'order_id': order_id},
-            {'contact_crm_id': self.site_contact_name.id, 'order_id': order_id}
+            {'contact_crm_id': self.site_contact_name.id, 'order_id': order_id},
+            {'contact_crm_id': self.project_manager.id, 'order_id': order_id}
         ]
 
     def _create_branch_in_beta_if_not_exists(self):
