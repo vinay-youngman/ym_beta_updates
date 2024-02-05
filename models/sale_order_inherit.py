@@ -228,12 +228,7 @@ class SaleOrderInherit(models.Model):
 
             self._validate_if_amendment_allowed(vals)
             quotation_id = (self.job_order.split('/')[-1])
-            existing_freight_at_beta = cursor.execute("SELECT quotations.freight + COALESCE(SUM(amend_order_log.freight), 0) AS total_amended_freight FROM quotations LEFT JOIN amend_order_log ON quotations.order_id = amend_order_log.order_id WHERE quotations.order_id = %s GROUP BY quotations.freight;", (self.beta_order_id,))
-            existing_freight_at_beta = cursor.fetchall()
-            existing_freight_at_beta = float(existing_freight_at_beta[0][0]) if existing_freight_at_beta else 0
-            if existing_freight_at_beta == 0 and self.customer_branch.credit_rating =='C':
-                raise UserError(_('Please Contact Your Manager Ask Them To Approve Your Order At Beta Before Amending This Order Via Odoo'))
-            amendment_details = self._get_amendment_details(vals,existing_freight_at_beta)
+            amendment_details = self._get_amendment_details(vals)
             cursor.execute("INSERT INTO amend_order_log (order_id, freight, amendment_doc, po_no, is_amended) VALUES (%(order_id)s, %(freight)s, %(amendment_doc)s, %(po_no)s, %(is_amended)s)", amendment_details)
             cursor.execute("SELECT LAST_INSERT_ID()")
             last_amend_order_log_id = cursor.fetchone()[0]
@@ -297,6 +292,9 @@ class SaleOrderInherit(models.Model):
             if get_order_realese_status[0][0] is not None:
                 cursor.execute("UPDATE orders SET released_at = NULL WHERE quotation_id = %s", (quotation_id,))
 
+
+            self.freight_amount += vals['additonal_freight_amount']
+            vals['additonal_freight_amount'] = 0
             connection.commit()
         except Error as err:
             _logger.error("evt=ORDER_CANNOT_BE_AMENDED msg=", exc_info=1)
@@ -312,19 +310,10 @@ class SaleOrderInherit(models.Model):
             if order_line[0] in not_allowed_actions:
                 raise UserError(_('You Cannot Delete an existing item'))
 
-    def _get_amendment_details(self, vals,existing_freight_at_beta):
-
-        freight_for_amend = 0
-
-        if 'freight_amount' in vals and vals['freight_amount'] < self.freight_amount and self.state == 'sale':
-            raise UserError(
-                _('The freight amount cannot be less than it was after the order has been placed.'))
-        else:
-            freight_for_amend = max(vals.get('freight_amount', 0) - existing_freight_at_beta, 0)
-
+    def _get_amendment_details(self, vals):
         amendment_details = {
             'order_id': self.beta_order_id,
-            'freight': freight_for_amend,
+            'freight': vals['additonal_freight_amount'] if vals['additonal_freight_amount'] else self.additonal_freight_amount,
             'amendment_doc': self._get_document_if_exists('rental_order'),
             'po_no': vals['po_number'] if 'po_number' in vals else self.po_number,
             'is_amended': 1
