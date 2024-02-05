@@ -292,6 +292,9 @@ class SaleOrderInherit(models.Model):
             if get_order_realese_status[0][0] is not None:
                 cursor.execute("UPDATE orders SET released_at = NULL WHERE quotation_id = %s", (quotation_id,))
 
+
+            self.freight_amount += vals['additonal_freight_amount']
+            vals['additonal_freight_amount'] = 0
             connection.commit()
         except Error as err:
             _logger.error("evt=ORDER_CANNOT_BE_AMENDED msg=", exc_info=1)
@@ -310,7 +313,7 @@ class SaleOrderInherit(models.Model):
     def _get_amendment_details(self, vals):
         amendment_details = {
             'order_id': self.beta_order_id,
-            'freight': vals['freight_amount'] if 'freight' in vals else self.freight_amount,
+            'freight': vals['additonal_freight_amount'] if vals['additonal_freight_amount'] else self.additonal_freight_amount,
             'amendment_doc': self._get_document_if_exists('rental_order'),
             'po_no': vals['po_number'] if 'po_number' in vals else self.po_number,
             'is_amended': 1
