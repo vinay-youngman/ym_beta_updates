@@ -103,9 +103,6 @@ def get_update_quotation_with_order_query():
 def get_challan_remarks_history():
     return "INSERT INTO challan_remark_history (order_id, challan_id, user_id, remark, remarks_date) VALUES (%s, 'Initial Order', %s, %s, CURRENT_TIMESTAMP)"
 
-
-
-
 def get_order_po_insert_query():
     return "INSERT INTO order_po(order_id, po_no, po_amt, balance) VALUES (%s, %s, %s, %s)"
 
@@ -359,7 +356,6 @@ class SaleOrderInherit(models.Model):
         self.env['customer.to.beta']._create_customer_in_beta_if_not_exists(self.partner_id)
         self._create_branch_in_beta_if_not_exists() #For branches that were added post initial customer creation
 
-
         try:
             connection = self._get_connection()
             connection.autocommit = False
@@ -376,8 +372,6 @@ class SaleOrderInherit(models.Model):
             cheque_ownership = created_by
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Get customer id from beta")
-
-
 
             if self.partner_id.is_non_gst_customer:
                 cursor.execute(get_beta_customer_id_for_non_gst_customer(), [self.partner_id.vat])
@@ -435,7 +429,6 @@ class SaleOrderInherit(models.Model):
             order_id = cursor.lastrowid
 
             self.beta_order_id = order_id
-
             # order
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
