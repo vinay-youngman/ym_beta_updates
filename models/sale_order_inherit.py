@@ -101,7 +101,7 @@ def get_update_quotation_with_order_query():
 
 
 def get_challan_remarks_history():
-    return "INSERT INTO challan_remark_history (order_id, challan_id, user_id, remark, remarks_date) VALUES (%s, 'NA', %s, %s, CURRENT_TIMESTAMP)"
+    return "INSERT INTO challan_remark_history (order_id, challan_id, user_id, remark, remarks_date) VALUES (%s, 'Initial Order', %s, %s, CURRENT_TIMESTAMP)"
 
 
 
