@@ -56,6 +56,11 @@ def get_quotation_items_insert_query():
            "item_code = VALUES(item_code), unit_price = VALUES(unit_price), " \
            "quantity = VALUES(quantity), updated_at = CURRENT_TIMESTAMP"
 
+def get_quotation_items_log_insert_query():
+    return "INSERT INTO quotation_items_log (quotation_id, item_code, unit_price, quantity, created_at, updated_at) VALUES (%(quotation_id)s, %(item_code)s, %(unit_price)s, %(quantity)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+
+
+
 
 def get_beta_user_id_from_email_query():
     return "select id from users where LOWER(email) = %s"
@@ -127,35 +132,39 @@ def _concatenate_address_string(address_strings):
     return ', '.join(map(str, arr))
 
 
-def _get_order_item_feed_details_amend_order(job_order, quotation_items, existing_quantity_at_beta, existing_order_item_feed):
+def _get_order_item_feed_details_amend_order(job_order, odoo_quotation_items, existing_quantity_at_beta, existing_order_item_feed):
     item_feed_details = []
 
-    for item in quotation_items:
+    for oddo_item in odoo_quotation_items:
         found_existing_item = False
-        for existing_item_code in existing_quantity_at_beta:
-            for existing_item_feed in existing_order_item_feed:
-                if (item['item_code'] == existing_item_code[0]) and (existing_item_feed[0] == item['item_code']):
-                    quantity = item['quantity'] - existing_item_code[1] + existing_item_feed[1]
+        for existing_item_quantity_at_quotation in existing_quantity_at_beta:
+            for existing_item_quantity_at_order_item_feed in existing_order_item_feed:
+                if (oddo_item['item_code'] == existing_item_quantity_at_quotation[0]) and (existing_item_quantity_at_order_item_feed[0] == oddo_item['item_code']):
+                    quantity = oddo_item['quantity'] - existing_item_quantity_at_quotation[1] + existing_item_quantity_at_order_item_feed[1]
 
                     if quantity < 0:
-                        raise Exception(_('Cannot Amend Less Than Material To Be Sent'))
+                        raise Exception('Cannot Amend Less Than Material To Be Sent')
 
                     item_feed_details.append({
                         'job_order': job_order,
-                        'item_code': item['item_code'],
+                        'item_code': oddo_item['item_code'],
                         'quantity': quantity,
                     })
                     found_existing_item = True
                     break
 
+            if found_existing_item:
+                break
+
         if not found_existing_item:
             item_feed_details.append({
                 'job_order': job_order,
-                'item_code': item['item_code'],
-                'quantity': item['quantity'],
+                'item_code': oddo_item['item_code'],
+                'quantity': oddo_item['quantity'],
             })
 
     return item_feed_details
+
 
 def _get_order_item_feed_details(job_order, quotation_items):
     item_feed_details = []
@@ -271,7 +280,7 @@ class SaleOrderInherit(models.Model):
                                 'quantity': quantity
                             })
 
-                    _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to save quoataion items")
+                    _logger.info("evt=AMMEND_ORDER_TO_BETA msg=Trying to save quoataion items")
 
                     quotation_items.append({
                         'quotation_id': self.job_order.split("/")[-1],
@@ -283,12 +292,20 @@ class SaleOrderInherit(models.Model):
 
 
             cursor.executemany(get_quotation_items_insert_query(), quotation_items)
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Quotation items saved")
+            _logger.info("evt=AMMEND_ORDER_TO_BETA msg=Quotation items saved")
 
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=insert into order item feed")
+            _logger.info("evt=AMMEND_ORDER_TO_BETA msg=Insert into order item feed")
             item_feed_details = _get_order_item_feed_details_amend_order(self.job_order, quotation_items, existing_quotation_items_at_beta, existing_order_item_feed)
             for item_detail in item_feed_details:
                 cursor.execute(get_order_item_feed_insert_query(), item_detail)
+            _logger.info("evt=AMMEND_ORDER_TO_BETA msg=Order item feed saved")
+
+
+            _logger.info("evt=AMMEND_ORDER_TO_BETA msg=Trying to save quoataion items log")
+            quotation_items_log = self._get_quotation_items_details_for_amend(quotation_id,quotation_items,existing_quotation_items_at_beta)
+            cursor.executemany(get_quotation_items_log_insert_query(), quotation_items_log)
+            _logger.info("evt=AMMEND_ORDER_TO_BETA msg = Quotation items log saved")
+
 
             get_order_realese_status = cursor.execute("SELECT released_at FROM orders WHERE quotation_id = %s",(quotation_id,))
             get_order_realese_status = cursor.fetchall()
@@ -407,6 +424,11 @@ class SaleOrderInherit(models.Model):
             quotation_items = self._get_quotation_items_and_total(quotation_id)
             cursor.executemany(get_quotation_items_insert_query(), quotation_items)
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Quotation items saved")
+
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Trying to save quoataion items_log")
+            quotation_items_log = self._get_quotation_items_and_total(quotation_id)
+            cursor.executemany(get_quotation_items_log_insert_query(), quotation_items_log)
+            _logger.info("evt=SEND_ORDER_TO_BETA msg=Quotation items log saved")
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Generating job order number")
             job_order_number = self._generate_job_number(created_by, customer_id, quotation_id)
@@ -614,6 +636,32 @@ class SaleOrderInherit(models.Model):
                 'quantity': order_line.product_uom_qty
             })
         return quotation_items
+
+    def _get_quotation_items_details_for_amend(self, quotation_id,quotation_items,existing_quotation_items_at_beta) :
+        difference_quotation_items_log = []
+
+        for odoo_item in quotation_items:
+            for existing_quotation_item in existing_quotation_items_at_beta:
+                if odoo_item['item_code'] == existing_quotation_item[0]:
+                    difference_quotation_items_log.append({
+                        'quotation_id': quotation_id,
+                        'item_code': odoo_item['item_code'],
+                        'unit_price': odoo_item['unit_price'],
+                        'quantity': odoo_item['quantity'] - existing_quotation_item[1]
+                    })
+                    break
+
+            else:
+                difference_quotation_items_log.append({
+                    'quotation_id': quotation_id,
+                    'item_code': odoo_item['item_code'],
+                    'unit_price': odoo_item['unit_price'],
+                    'quantity': odoo_item['quantity']
+                })
+
+
+        return difference_quotation_items_log
+
 
     def _validate_order_before_confirming(self):
         if  self.order_type == 'Rental':
