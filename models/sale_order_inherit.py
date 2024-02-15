@@ -100,6 +100,9 @@ def get_update_quotation_with_order_query():
     return "UPDATE quotations set order_id = %s, converted_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP where id = %s"
 
 
+def get_challan_remarks_history():
+    return "INSERT INTO challan_remark_history (order_id, challan_id, user_id, remark, remarks_date) VALUES (%s, 'Initial Order', %s, %s, CURRENT_TIMESTAMP)"
+
 def get_order_po_insert_query():
     return "INSERT INTO order_po(order_id, po_no, po_amt, balance) VALUES (%s, %s, %s, %s)"
 
@@ -459,6 +462,10 @@ class SaleOrderInherit(models.Model):
                 _logger.info("evt=SEND_ORDER_TO_BETA msg=insert into order item feed")
                 cursor.executemany(get_order_item_feed_insert_query(),
                                    _get_order_item_feed_details(job_order_number, quotation_items))
+
+            if self.remark:
+                _logger.info("evt=SEND_REMARKS_TO_BETA msg=Updating challan remarks history")
+                cursor.execute(get_challan_remarks_history(), (self.beta_order_id, created_by, self.remark))
 
             super(SaleOrderInherit, self).action_confirm()
 
