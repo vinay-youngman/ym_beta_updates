@@ -367,9 +367,10 @@ class SaleOrderInherit(models.Model):
 
     def action_confirm(self):
         if self.is_sale_order_approval_required:
-            super(SaleOrderInherit, self).action_confirm()
-            return
+           result = super(SaleOrderInherit, self).action_confirm()
+           return result
         self._validate_order_before_confirming()
+
         self.env['customer.to.beta']._create_customer_in_beta_if_not_exists(self.partner_id)
         self._create_branch_in_beta_if_not_exists() #For branches that were added post initial customer creation
 
@@ -454,6 +455,9 @@ class SaleOrderInherit(models.Model):
             # order
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
+            if self.partner_id.credit_rating != 'A':
+                self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
+
             try:
                 cursor.executemany(_get_contact_notification_insert_query(), self._get_contacts_to_notify(order_id))
                 _logger.info("evt=SEND_ORDER_TO_BETA msg=Saved contacts to notify")
@@ -464,7 +468,7 @@ class SaleOrderInherit(models.Model):
                 cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, cheque_ownership))
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
-            cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.po_amount, self.po_amount))
+            cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.total_po_amount, self.total_po_amount))
             po_details = self._generate_po_details(order_id, quotation_items)
 
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO details")
@@ -611,7 +615,7 @@ class SaleOrderInherit(models.Model):
                     'order_id': order_id,
                     'po_no': self.po_number,
                     'po_date': self.po_date.strftime('%Y-%m-%d'),
-                    'po_amount': self.po_amount,
+                    'po_amount': self.total_po_amount,
                     'item_code': item['item_code'],
                     'quantity': item['quantity'],
                 })
@@ -669,7 +673,7 @@ class SaleOrderInherit(models.Model):
                 raise ValidationError(_("Confirmation of tentative quotation is not allowed"))
             if not self.po_number:
                 raise ValidationError(_('PO Number is mandatory for confirming a quotation'))
-            if not self.po_amount:
+            if not self.total_po_amount:
                 raise ValidationError(_('PO Amount is mandatory for confirming a quotation'))
             if not self.po_date:
                 raise ValidationError(_('PO Date is mandatory for confirming a quotation'))
