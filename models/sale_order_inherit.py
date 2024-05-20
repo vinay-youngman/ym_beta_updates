@@ -455,9 +455,6 @@ class SaleOrderInherit(models.Model):
             # order
             _logger.info("evt=SEND_ORDER_TO_BETA msg=Order saved with id" + str(order_id))
 
-            if self.partner_id.credit_rating != 'A':
-                self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
-
             try:
                 cursor.executemany(_get_contact_notification_insert_query(), self._get_contacts_to_notify(order_id))
                 _logger.info("evt=SEND_ORDER_TO_BETA msg=Saved contacts to notify")
@@ -504,6 +501,8 @@ class SaleOrderInherit(models.Model):
 
             cursor.close()
             connection.commit()
+            self._send_po_details_for_not_a_type()
+
 
         except UserError as ue:
             connection.rollback()
@@ -517,6 +516,12 @@ class SaleOrderInherit(models.Model):
             connection.rollback()
             raise UserError(_(e))
 
+
+    def _send_po_details_for_not_a_type(self):
+        if self.partner_id.credit_rating != 'A':
+            self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
+
+
     def _get_current_date_time(self):
         ist = pytz.timezone('Asia/Kolkata')
         now = datetime.datetime.now(ist)
@@ -529,6 +534,8 @@ class SaleOrderInherit(models.Model):
             {'contact_crm_id': self.site_contact_name.id, 'order_id': order_id},
             {'contact_crm_id': self.project_manager.id, 'order_id': order_id}
         ]
+
+
 
     def _create_branch_in_beta_if_not_exists(self):
         cursor = None
@@ -671,12 +678,13 @@ class SaleOrderInherit(models.Model):
         if  self.order_type == 'Rental':
             if self.tentative_quo:
                 raise ValidationError(_("Confirmation of tentative quotation is not allowed"))
-            if not self.po_number:
-                raise ValidationError(_('PO Number is mandatory for confirming a quotation'))
-            if not self.total_po_amount:
-                raise ValidationError(_('PO Amount is mandatory for confirming a quotation'))
-            if not self.po_date:
-                raise ValidationError(_('PO Date is mandatory for confirming a quotation'))
+            if self.po_available:
+                if not self.po_number:
+                    raise ValidationError(_('PO Number is mandatory for confirming a quotation'))
+                if not self.total_po_amount:
+                    raise ValidationError(_('PO Amount is mandatory for confirming a quotation'))
+                if not self.po_date:
+                    raise ValidationError(_('PO Date is mandatory for confirming a quotation'))
             if not self.place_of_supply:
                 raise ValidationError(_('Place of Supply is mandatory for confirming a quotation'))
             if not self.rental_order and self.partner_id.rental_order is True:
