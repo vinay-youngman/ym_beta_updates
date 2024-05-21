@@ -518,7 +518,7 @@ class SaleOrderInherit(models.Model):
 
 
     def _send_po_details_for_not_a_type(self):
-        if self.partner_id.credit_rating != 'A':
+        if self.partner_id.credit_rating != 'A' and self.po_details:
             self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
 
 
