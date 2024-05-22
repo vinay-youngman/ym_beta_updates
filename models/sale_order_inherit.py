@@ -88,9 +88,13 @@ def get_state_code_from_state_alpha_query(state_code):
 
 
 def get_order_insert_query():
-    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, billing_godown, created_by, total, is_authorized, created_at, updated_at,crm_account_id) " \
-           "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(billing_godown)s, %(created_by)s, %(total)s, %(is_authorized)s,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,%(crm_account_id)s)"
-
+    return ("INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, "
+            "rental_advance, rental_order, godown_id, billing_godown, created_by, total, is_authorized, created_at, "
+            "updated_at, crm_account_id, po_status) "
+            "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, "
+            "%(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(billing_godown)s, "
+            "%(created_by)s, %(total)s, %(is_authorized)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %(crm_account_id)s, "
+            "%(po_status)s)")
 def _get_cheque_details_insert_query():
     return "INSERT INTO customer_security_cheque (customer_id, order_id, cheque_no, cheque_amount, cheque_date,bank, lapsed, verified, cheque_ownership, security_cheque) VALUES(%(customer_id)s, %(order_id)s, %(cheque_no)s, %(cheque_amount)s, %(cheque_date)s, %(bank)s, %(lapsed)s, %(verified)s, %(cheque_ownership)s, %(security_cheque)s)"
 
@@ -782,7 +786,8 @@ class SaleOrderInherit(models.Model):
             'created_by': created_by,
             'total': quotation_total,
             'is_authorized': is_authorized,
-            'crm_account_id':self.id
+            'crm_account_id':self.id,
+            'po_status':self.po_details.po_details_po_status
 
         }
 
