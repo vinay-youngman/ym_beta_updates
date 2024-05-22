@@ -787,7 +787,7 @@ class SaleOrderInherit(models.Model):
             'total': quotation_total,
             'is_authorized': is_authorized,
             'crm_account_id':self.id,
-            'po_status':self.po_details.po_details_po_status
+            'po_status': self.po_details.po_details_po_status.upper() if self.po_details.po_details_po_status else 'APPROVED'
 
         }
 
