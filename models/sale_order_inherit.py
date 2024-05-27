@@ -522,7 +522,7 @@ class SaleOrderInherit(models.Model):
 
 
     def _send_po_details_for_not_a_type(self):
-        if self.partner_id.credit_rating != 'A' and self.po_details:
+        if self.po_details:
             self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
 
 
@@ -787,7 +787,7 @@ class SaleOrderInherit(models.Model):
             'total': quotation_total,
             'is_authorized': is_authorized,
             'crm_account_id':self.id,
-            'po_status': self.po_details.po_details_po_status.upper() if self.po_details.po_details_po_status else 'APPROVED'
+            'po_status': self.po_details.po_details_po_status.upper()
 
         }
 
