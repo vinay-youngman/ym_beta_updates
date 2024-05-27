@@ -254,7 +254,7 @@ class SaleOrderInherit(models.Model):
             existing_order_item_feed = cursor.fetchall()
 
             quotation_items = []
-            for order_line in vals.get('order_line', []):
+            for order_line in vals.get('amend_order_line_ids', []):
                 data_dict = order_line[2]
                 action_to_perform = order_line[0]
 
@@ -317,8 +317,8 @@ class SaleOrderInherit(models.Model):
                 cursor.execute("UPDATE orders SET released_at = NULL WHERE quotation_id = %s", (quotation_id,))
 
 
-            self.freight_amount += vals['additional_freight_amount'] if 'additional_freight_amount' in vals else self.additional_freight_amount
-            vals['additional_freight_amount'] = 0
+            self.freight_amount += vals['additional_freight'] if 'additional_freight' in vals else 0
+            vals['additional_freight'] = 0
             connection.commit()
         except Error as err:
             _logger.error("evt=ORDER_CANNOT_BE_AMENDED msg=", exc_info=1)
@@ -337,9 +337,9 @@ class SaleOrderInherit(models.Model):
     def _get_amendment_details(self, vals):
         amendment_details = {
             'order_id': self.beta_order_id,
-            'freight': vals['additional_freight_amount'] if 'additional_freight_amount' in vals else self.additional_freight_amount,
+            'freight': vals['additional_freight'] if 'additional_freight' in vals else 0,
             'amendment_doc': self._get_document_if_exists('rental_order'),
-            'po_no': vals['po_number'] if 'po_number' in vals else self.po_number,
+            'po_no': vals['po_number'] if 'po_number' in vals else False,
             'is_amended': 1
         }
         return amendment_details
