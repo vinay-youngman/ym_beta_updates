@@ -358,7 +358,6 @@ class SaleOrderInherit(models.Model):
             cursor.execute("UPDATE quotations SET pickup_date=%s WHERE order_id=%s",(self.pickup_date, self.beta_order_id))
             cursor.execute("UPDATE orders SET rental_order = %s WHERE id = %s",[self._get_document_if_exists('rental_order'), self.beta_order_id])
             cursor.execute("UPDATE challans SET deleted_at = current_timestamp WHERE deleted_at IS NULL AND challan_type = 'Pickup' AND challans.recieving IS NULL AND order_id = %s",(self.beta_order_id,))
-
             connection.commit()
 
         except Error as err:
@@ -787,7 +786,7 @@ class SaleOrderInherit(models.Model):
             'total': quotation_total,
             'is_authorized': is_authorized,
             'crm_account_id':self.id,
-            'po_status': self.po_details.po_details_po_status.upper()
+            'po_status': self.po_details.po_details_po_status.upper() if self.po_details.po_details_po_status else 'APPROVED'
 
         }
 
