@@ -234,9 +234,8 @@ class SaleOrderInherit(models.Model):
 
     beta_order_id = fields.Integer(string = "Beta Order Id")
 
-    def action_amend(self, vals):
+    def action_amend(self, vals,po_details):
         try:
-
 
             connection = self._get_connection()
             connection.autocommit = False
@@ -319,6 +318,10 @@ class SaleOrderInherit(models.Model):
 
             self.freight_amount += vals['additional_freight'] if 'additional_freight' in vals else 0
             vals['additional_freight'] = 0
+
+            if self.po_available:
+                self.env['sale.po.details']._send_po_details_to_beta(po_details)
+
             connection.commit()
         except Error as err:
             _logger.error("evt=ORDER_CANNOT_BE_AMENDED msg=", exc_info=1)
@@ -521,9 +524,10 @@ class SaleOrderInherit(models.Model):
 
 
     def _send_po_details_for_not_a_type(self):
-        if self.po_details:
+        if self.po_details and self.po_available:
             self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
-
+        if not self.po_available:
+            self.po_details.po_details_po_status = 'approved'
 
     def _get_current_date_time(self):
         ist = pytz.timezone('Asia/Kolkata')
