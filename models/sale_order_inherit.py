@@ -234,7 +234,7 @@ class SaleOrderInherit(models.Model):
 
     beta_order_id = fields.Integer(string = "Beta Order Id")
 
-    def action_amend(self, vals,po_details):
+    def action_amend(self, vals,po_details= None):
         try:
 
             connection = self._get_connection()
@@ -319,7 +319,7 @@ class SaleOrderInherit(models.Model):
             self.freight_amount += vals['additional_freight'] if 'additional_freight' in vals else 0
             vals['additional_freight'] = 0
 
-            if self.po_available:
+            if self.po_available and po_details:
                 self.env['sale.po.details']._send_po_details_to_beta(po_details)
 
             connection.commit()
@@ -470,12 +470,12 @@ class SaleOrderInherit(models.Model):
             if self.security_cheque:
                 cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, cheque_ownership))
 
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
-            cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.total_po_amount, self.total_po_amount))
-            po_details = self._generate_po_details(order_id, quotation_items)
-
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO details")
-            cursor.executemany(get_order_po_details_insert_query(), po_details)
+            # _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
+            # cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.total_po_amount, self.total_po_amount))
+            # po_details = self._generate_po_details(order_id, quotation_items)
+            #
+            # _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO details")
+            # cursor.executemany(get_order_po_details_insert_query(), po_details)
 
             billing_process_data = self._get_billing_process_data(order_id, location_id)
             query = get_billing_process_insert_query()
