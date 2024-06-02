@@ -529,6 +529,7 @@ class SaleOrderInherit(models.Model):
             self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
         if not self.po_available:
             self.po_details.po_details_po_status = 'approved'
+            self.env['sale.po.details']._send_mail_to_users(self.po_details)
 
     def _get_current_date_time(self):
         ist = pytz.timezone('Asia/Kolkata')
