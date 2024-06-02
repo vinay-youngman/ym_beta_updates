@@ -90,11 +90,12 @@ def get_state_code_from_state_alpha_query(state_code):
 def get_order_insert_query():
     return ("INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, "
             "rental_advance, rental_order, godown_id, billing_godown, created_by, total, is_authorized, created_at, "
-            "updated_at, crm_account_id, po_status) "
+            "updated_at, crm_account_id, po_status, po_stage) "
             "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, "
             "%(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(billing_godown)s, "
             "%(created_by)s, %(total)s, %(is_authorized)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %(crm_account_id)s, "
-            "%(po_status)s)")
+            "%(po_status)s, %(po_stage)s)")
+
 def _get_cheque_details_insert_query():
     return "INSERT INTO customer_security_cheque (customer_id, order_id, cheque_no, cheque_amount, cheque_date,bank, lapsed, verified, cheque_ownership, security_cheque) VALUES(%(customer_id)s, %(order_id)s, %(cheque_no)s, %(cheque_amount)s, %(cheque_date)s, %(bank)s, %(lapsed)s, %(verified)s, %(cheque_ownership)s, %(security_cheque)s)"
 
@@ -790,9 +791,26 @@ class SaleOrderInherit(models.Model):
             'total': quotation_total,
             'is_authorized': is_authorized,
             'crm_account_id':self.id,
-            'po_status':'APPROVED'
+            'po_status':'APPROVED',
+            'po_stage':self._get_po_stage()
 
         }
+
+    def _get_po_stage(self):
+        for record in self:
+            if record.partner_id.credit_rating == 'A':
+                if record.po_available:
+                    return 'PO'
+                elif record.po_promise_date:
+                    return 'PROMISE'
+            elif record.partner_id.credit_rating in ('B', 'C'):
+                if not record.po_available:
+                    if not record.po_promise_date:
+                        return 'NA'
+                    else:
+                        return 'PROMISE'
+        return 'NoCredit'
+
 
     def _get_document_if_exists(self, field_name):
         attachment = self.env['ir.attachment'].sudo().search(
