@@ -88,8 +88,13 @@ def get_state_code_from_state_alpha_query(state_code):
 
 
 def get_order_insert_query():
-    return "INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, rental_advance, rental_order, godown_id, billing_godown, created_by, total, is_authorized, created_at, updated_at,crm_account_id) " \
-           "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, %(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(billing_godown)s, %(created_by)s, %(total)s, %(is_authorized)s,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,%(crm_account_id)s)"
+    return ("INSERT INTO orders (quotation_id, customer_id, job_order, po_no, place_of_supply, gstn, security_cheque, "
+            "rental_advance, rental_order, godown_id, billing_godown, created_by, total, is_authorized, created_at, "
+            "updated_at, crm_account_id, po_status, po_stage) "
+            "VALUES (%(quotation_id)s, %(customer_id)s, %(job_order)s, %(po_no)s, %(place_of_supply)s, %(gstn)s, "
+            "%(security_cheque)s, %(rental_advance)s, %(rental_order)s, %(godown_id)s, %(billing_godown)s, "
+            "%(created_by)s, %(total)s, %(is_authorized)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %(crm_account_id)s, "
+            "%(po_status)s, %(po_stage)s)")
 
 def _get_cheque_details_insert_query():
     return "INSERT INTO customer_security_cheque (customer_id, order_id, cheque_no, cheque_amount, cheque_date,bank, lapsed, verified, cheque_ownership, security_cheque) VALUES(%(customer_id)s, %(order_id)s, %(cheque_no)s, %(cheque_amount)s, %(cheque_date)s, %(bank)s, %(lapsed)s, %(verified)s, %(cheque_ownership)s, %(security_cheque)s)"
@@ -230,9 +235,8 @@ class SaleOrderInherit(models.Model):
 
     beta_order_id = fields.Integer(string = "Beta Order Id")
 
-    def action_amend(self, vals):
+    def action_amend(self, vals,po_details= None):
         try:
-
 
             connection = self._get_connection()
             connection.autocommit = False
@@ -250,7 +254,7 @@ class SaleOrderInherit(models.Model):
             existing_order_item_feed = cursor.fetchall()
 
             quotation_items = []
-            for order_line in vals.get('order_line', []):
+            for order_line in vals.get('amend_order_line_ids', []):
                 data_dict = order_line[2]
                 action_to_perform = order_line[0]
 
@@ -313,8 +317,12 @@ class SaleOrderInherit(models.Model):
                 cursor.execute("UPDATE orders SET released_at = NULL WHERE quotation_id = %s", (quotation_id,))
 
 
-            self.freight_amount += vals['additional_freight_amount'] if 'additional_freight_amount' in vals else self.additional_freight_amount
-            vals['additional_freight_amount'] = 0
+            self.freight_amount += vals['additional_freight'] if 'additional_freight' in vals else 0
+            vals['additional_freight'] = 0
+
+            if self.po_available and po_details:
+                self.env['sale.po.details']._send_po_details_to_beta(po_details)
+
             connection.commit()
         except Error as err:
             _logger.error("evt=ORDER_CANNOT_BE_AMENDED msg=", exc_info=1)
@@ -333,9 +341,9 @@ class SaleOrderInherit(models.Model):
     def _get_amendment_details(self, vals):
         amendment_details = {
             'order_id': self.beta_order_id,
-            'freight': vals['additional_freight_amount'] if 'additional_freight_amount' in vals else self.additional_freight_amount,
+            'freight': vals['additional_freight'] if 'additional_freight' in vals else 0,
             'amendment_doc': self._get_document_if_exists('rental_order'),
-            'po_no': vals['po_number'] if 'po_number' in vals else self.po_number,
+            'po_no': vals['po_number'] if 'po_number' in vals else False,
             'is_amended': 1
         }
         return amendment_details
@@ -354,7 +362,6 @@ class SaleOrderInherit(models.Model):
             cursor.execute("UPDATE quotations SET pickup_date=%s WHERE order_id=%s",(self.pickup_date, self.beta_order_id))
             cursor.execute("UPDATE orders SET rental_order = %s WHERE id = %s",[self._get_document_if_exists('rental_order'), self.beta_order_id])
             cursor.execute("UPDATE challans SET deleted_at = current_timestamp WHERE deleted_at IS NULL AND challan_type = 'Pickup' AND challans.recieving IS NULL AND order_id = %s",(self.beta_order_id,))
-
             connection.commit()
 
         except Error as err:
@@ -367,9 +374,10 @@ class SaleOrderInherit(models.Model):
 
     def action_confirm(self):
         if self.is_sale_order_approval_required:
-            super(SaleOrderInherit, self).action_confirm()
-            return
+           result = super(SaleOrderInherit, self).action_confirm()
+           return result
         self._validate_order_before_confirming()
+
         self.env['customer.to.beta']._create_customer_in_beta_if_not_exists(self.partner_id)
         self._create_branch_in_beta_if_not_exists() #For branches that were added post initial customer creation
 
@@ -463,12 +471,12 @@ class SaleOrderInherit(models.Model):
             if self.security_cheque:
                 cursor.execute(_get_cheque_details_insert_query(), self._get_security_cheque_data(customer_id, order_id, cheque_ownership))
 
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
-            cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.po_amount, self.po_amount))
-            po_details = self._generate_po_details(order_id, quotation_items)
-
-            _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO details")
-            cursor.executemany(get_order_po_details_insert_query(), po_details)
+            # _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO data")
+            # cursor.execute(get_order_po_insert_query(), (order_id, self.po_number, self.total_po_amount, self.total_po_amount))
+            # po_details = self._generate_po_details(order_id, quotation_items)
+            #
+            # _logger.info("evt=SEND_ORDER_TO_BETA msg=Saving PO details")
+            # cursor.executemany(get_order_po_details_insert_query(), po_details)
 
             billing_process_data = self._get_billing_process_data(order_id, location_id)
             query = get_billing_process_insert_query()
@@ -500,6 +508,8 @@ class SaleOrderInherit(models.Model):
 
             cursor.close()
             connection.commit()
+            self._send_po_details_for_not_a_type()
+
 
         except UserError as ue:
             connection.rollback()
@@ -513,6 +523,14 @@ class SaleOrderInherit(models.Model):
             connection.rollback()
             raise UserError(_(e))
 
+
+    def _send_po_details_for_not_a_type(self):
+        if self.po_details and self.po_available:
+            self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
+        if not self.po_available:
+            self.po_details.po_details_po_status = 'approved'
+            self.env['sale.po.details']._send_mail_to_users(self.po_details)
+
     def _get_current_date_time(self):
         ist = pytz.timezone('Asia/Kolkata')
         now = datetime.datetime.now(ist)
@@ -525,6 +543,8 @@ class SaleOrderInherit(models.Model):
             {'contact_crm_id': self.site_contact_name.id, 'order_id': order_id},
             {'contact_crm_id': self.project_manager.id, 'order_id': order_id}
         ]
+
+
 
     def _create_branch_in_beta_if_not_exists(self):
         cursor = None
@@ -611,7 +631,7 @@ class SaleOrderInherit(models.Model):
                     'order_id': order_id,
                     'po_no': self.po_number,
                     'po_date': self.po_date.strftime('%Y-%m-%d'),
-                    'po_amount': self.po_amount,
+                    'po_amount': self.total_po_amount,
                     'item_code': item['item_code'],
                     'quantity': item['quantity'],
                 })
@@ -667,12 +687,13 @@ class SaleOrderInherit(models.Model):
         if  self.order_type == 'Rental':
             if self.tentative_quo:
                 raise ValidationError(_("Confirmation of tentative quotation is not allowed"))
-            if not self.po_number:
-                raise ValidationError(_('PO Number is mandatory for confirming a quotation'))
-            if not self.po_amount:
-                raise ValidationError(_('PO Amount is mandatory for confirming a quotation'))
-            if not self.po_date:
-                raise ValidationError(_('PO Date is mandatory for confirming a quotation'))
+            if self.po_available:
+                if not self.po_number:
+                    raise ValidationError(_('PO Number is mandatory for confirming a quotation'))
+                if not self.total_po_amount:
+                    raise ValidationError(_('PO Amount is mandatory for confirming a quotation'))
+                if not self.po_date:
+                    raise ValidationError(_('PO Date is mandatory for confirming a quotation'))
             if not self.place_of_supply:
                 raise ValidationError(_('Place of Supply is mandatory for confirming a quotation'))
             if not self.rental_order and self.partner_id.rental_order is True:
@@ -770,9 +791,27 @@ class SaleOrderInherit(models.Model):
             'created_by': created_by,
             'total': quotation_total,
             'is_authorized': is_authorized,
-            'crm_account_id':self.id
+            'crm_account_id':self.id,
+            'po_status':'APPROVED',
+            'po_stage':self._get_po_stage()
 
         }
+
+    def _get_po_stage(self):
+        for record in self:
+            if record.partner_id.credit_rating == 'A':
+                if record.po_available:
+                    return 'PO'
+                elif record.po_promise_date:
+                    return 'PROMISE'
+            elif record.partner_id.credit_rating in ('B', 'C'):
+                if not record.po_available:
+                    if not record.po_promise_date:
+                        return 'NA'
+                    else:
+                        return 'PROMISE'
+        return 'NoCredit'
+
 
     def _get_document_if_exists(self, field_name):
         attachment = self.env['ir.attachment'].sudo().search(
