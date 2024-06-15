@@ -808,11 +808,12 @@ class SaleOrderInherit(models.Model):
                 elif record.po_promise_date:
                     return 'PROMISE'
             elif record.partner_id.credit_rating in ('B', 'C'):
-                if not record.po_available:
-                    if not record.po_promise_date:
-                        return 'NA'
-                    else:
-                        return 'PROMISE'
+                if record.po_available:
+                    return 'PO'
+                elif record.po_promise_date:
+                    return 'PROMISE'
+                else:
+                    return 'N/A'
         return 'NoCredit'
 
 
