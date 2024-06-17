@@ -320,8 +320,11 @@ class SaleOrderInherit(models.Model):
             self.freight_amount += vals['additional_freight'] if 'additional_freight' in vals else 0
             vals['additional_freight'] = 0
 
-            if self.po_available and po_details:
-                self.env['sale.po.details']._send_po_details_to_beta(po_details)
+            if self.po_available and po_details and po_details.po_details_po_status == 'approved':
+                self.env['sale.po.details']._send_po_details_to_beta(po_details,'AMEND')
+            elif self.po_available and po_details and po_details.po_details_po_status != 'approved':
+                 po_details.po_details_po_status = 'pending'
+                 self.env['sale.po.details']._send_po_status(po_details)
 
             connection.commit()
         except Error as err:
@@ -526,7 +529,7 @@ class SaleOrderInherit(models.Model):
 
     def _send_po_details_for_not_a_type(self):
         if self.po_details and self.po_available:
-            self.env['sale.po.details']._send_po_details_to_beta(self.po_details)
+            self.env['sale.po.details']._send_po_details_to_beta(self.po_details,'ORDER')
         if not self.po_available:
             self.po_details.po_details_po_status = 'approved'
             self.env['sale.po.details']._send_mail_to_users(self.po_details)
@@ -805,11 +808,12 @@ class SaleOrderInherit(models.Model):
                 elif record.po_promise_date:
                     return 'PROMISE'
             elif record.partner_id.credit_rating in ('B', 'C'):
-                if not record.po_available:
-                    if not record.po_promise_date:
-                        return 'NA'
-                    else:
-                        return 'PROMISE'
+                if record.po_available:
+                    return 'PO'
+                elif record.po_promise_date:
+                    return 'PROMISE'
+                else:
+                    return 'N/A'
         return 'NoCredit'
 
 
