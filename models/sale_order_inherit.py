@@ -8,8 +8,9 @@ from mysql.connector import Error
 import json
 import requests
 import traceback
+import mimetypes
+import datetime
 
-import datetime, mimetypes
 import pytz
 
 _logger = logging.getLogger(__name__)
@@ -234,7 +235,7 @@ class SaleOrderInherit(models.Model):
     _inherit = 'sale.order'
 
     beta_order_id = fields.Integer(string = "Beta Order Id")
-
+    
     def action_amend(self, vals,po_details= None):
         try:
 
@@ -531,7 +532,7 @@ class SaleOrderInherit(models.Model):
         if self.po_details and self.po_available:
             self.env['sale.po.details']._send_po_details_to_beta(self.po_details,'ORDER')
         if not self.po_available:
-            self.po_details.po_details_po_status = 'approved'
+            self.po_details.po_details_po_status = 'po_promise'
             self.env['sale.po.details']._send_mail_to_users(self.po_details)
 
     def _get_current_date_time(self):
@@ -897,6 +898,87 @@ class SaleOrderInherit(models.Model):
         finally:
             if connection and connection.is_connected() and cursor:
                 cursor.close()
+
+    def open_force_pickup(self):
+        if not self.id:
+            raise UserError('You must save the po Before force pickup')
+        if not self.job_order:
+            raise UserError('You must have and order to confirm ')
+        for record in self:
+            data = {
+                'order_id': record.beta_order_id,
+                'date': datetime.now().strftime('%Y-%m-%d')
+            }
+
+            headers = {
+                'Content-Type': 'application/json',
+            }
+
+            beta_force_pickup_endpoint = self.env['ir.config_parameter'].sudo().get_param(
+                'ym_configs.ym_beta_force_pickup_endpoint')
+
+            try:
+                response = requests.post(beta_force_pickup_endpoint, json=data, headers=headers,
+                                         verify=False)
+                response.raise_for_status()
+                response_data = response.json()
+                if response_data.get('status') == 'success' and 'message' in response_data:
+                    self._create_log_note(response_data)
+                    self._block_jobsite_or_customer()
+
+                    _logger.info("Request successful. Response: {}".format(response_data))
+
+            except requests.exceptions.RequestException as e:
+                _logger.error("Error: Failed to hit the API: {}".format(e))
+                raise UserError("Failed to hit the API: {}".format(e))
+
+    def _create_log_note(self, response_data):
+        message_body = response_data.get('message')
+        if message_body:
+            note_subtype = self.env['mail.message.subtype'].search([('name', '=', 'Note')], limit=1)
+            if note_subtype:
+                self.env['mail.message'].create({
+                    'body': message_body,
+                    'subtype_id': note_subtype.id,
+                    'model': self._name,
+                    'res_id': self.id,
+                })
+                return True
+        return False
+
+    def _block_jobsite_or_customer(self):
+        if self.partner_id.credit_rating == 'A':
+            if self.partner_id.id not in self.jobsite_id.blocked_customer_list.ids:
+                self.env['jobsite.blocked.customers'].create({
+                    'jobsite_id': self.jobsite_id.id,
+                    'blocked_customer_id': self.partner_id.id,
+                })
+        else:
+            if self._update_customer_status_on_beta():
+                self.partner_id.cpl_status = 'BLOCKED'
+            else:
+                raise UserError("Failed to update customer status on beta system.")
+    def _update_customer_status_on_beta(self):
+        try:
+            connection = self._get_connection()
+            connection.autocommit = False
+            cursor = connection.cursor()
+
+            cursor.execute("SELECT * FROM customer_masters WHERE gstn = %s", (self.partner_id.gstn,))
+            customer_at_beta = cursor.fetchone()
+
+            if customer_at_beta:
+                cursor.execute("UPDATE customer_masters SET status = 'BLOCK' WHERE id = %s",
+                               (customer_at_beta['id'],))
+                cursor.execute("UPDATE customers SET status = 'BLOCK' WHERE customer_master_id = %s",
+                               (customer_at_beta['id'],))
+
+            connection.commit()
+            return True
+        except Exception as e:
+            connection.rollback()
+            _logger.error(f"An error occurred: {e}")
+            return False
 
 
 
